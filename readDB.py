@@ -6,6 +6,16 @@ Created on Wed Jun 03 14:47:53 2015
 """
 
 import os
+from scipy import misc
+
+DBpath = os.path.join(".", 'IAM')
+formsPath = os.path.join(DBpath, 'forms')
+linesPath = os.path.join(DBpath, 'lines')
+wordsPath = os.path.join(DBpath, 'words')
+asciiPath = os.path.join(DBpath, 'ascii')
+formsFile = os.path.join(asciiPath, 'forms.txt')
+linesFile = os.path.join(asciiPath, 'lines.txt')
+wordsFile = os.path.join(asciiPath, 'words.txt')
 
 #####################################################################
 class Writer:
@@ -47,6 +57,7 @@ class Form:
     def __init__(self, i_id = ''):
         self.id = i_id
         self.linesRef = []
+        self.data = []
         
     def sumLines(self):
         return len(self.linesRef)
@@ -60,6 +71,10 @@ class Form:
     def __repr__(self):
         return ('Form (id=%s, lines=%s)' 
                 % (repr(self.id), repr(self.sumLines()) ) )
+                
+    def loadData(self, i_formsPath = formsPath):
+        fullFileName = os.path.join(i_formsPath, self.id + '.png')
+        self.data = misc.imread(fullFileName)
  
 #####################################################################       
 class Line:
@@ -68,6 +83,7 @@ class Line:
         self.id = i_id
         self.wordsRef = []
         self.label = i_label
+        self.data = []
         
     def sumWords(self):
         return len(self.wordsRef)
@@ -75,15 +91,31 @@ class Line:
     def __repr__(self):
         return ('Line (id=%s, words=%s, label=%s)' 
                 % (repr(self.id), repr(self.sumWords()),  repr(self.label)))
+                
+    def loadData(self, i_linesPath = linesPath):
+        partsName = self.id.split('-');
+        folder1 = os.path.join(i_linesPath, partsName[0])
+        folder2 = os.path.join(folder1, partsName[0] + '-' + partsName[1])
+        fullFileName = os.path.join(folder2, self.id + '.png')
+        self.data = misc.imread(fullFileName)
 
 #####################################################################        
 class Word:
     def __init__(self, i_id = '', i_label = ''):
         self.id = i_id
         self.label = i_label
+        self.data = []
+        
     def __repr__(self):
         return ('Word (id=%s, label=%s)' 
                 % (repr(self.id),  repr(self.label)))
+    
+    def loadData(self, i_wordsPath = wordsPath):
+        partsName = self.id.split('-');
+        folder1 = os.path.join(i_wordsPath, partsName[0])
+        folder2 = os.path.join(folder1, partsName[0] + '-' + partsName[1])
+        fullFileName = os.path.join(folder2, self.id + '.png')
+        self.data = misc.imread(fullFileName)
         
 #####################################################################
 #####################################################################
@@ -92,13 +124,6 @@ forms = {}
 lines = {}
 words = {}
 
-
-
-DBpath = os.path.join(".", 'IAM')
-asciiPath = os.path.join(DBpath, 'ascii')
-formsFile = os.path.join(asciiPath, 'forms.txt')
-linesFile = os.path.join(asciiPath, 'lines.txt')
-wordsFile = os.path.join(asciiPath, 'words.txt')
 
 #%% read forms
 f=open(formsFile)
@@ -170,4 +195,33 @@ for writerId in writers:
 #%%
 sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, reverse=True)
 # only 50 writers wrote more than 400 words
-print sortedWriters[0:50]
+print sortedWriters[0:10]
+
+#test
+#words.items()[8][1].loadData(wordsPath)
+
+trainWriters = sortedWriters[0:5]
+# load forms, lines and words images for writers
+for item in trainWriters:
+    writer = item[1]
+    print 'Loading ', len(writer.formsRef), ' forms...'
+    for formId in writer.formsRef:
+        forms[formId].loadData()
+        for lineId in forms[formId].linesRef:
+            lines[lineId].loadData()
+#            print '  Loading ', len(lines[lineId].wordsRef), ' words'
+            for wordId in lines[lineId].wordsRef:
+                words[wordId].loadData()
+                
+
+#%% data was read
+###########################################################################################
+## in same way images will be accessed for each writer and tuples will be created
+#for item in trainWriters:
+#    writer = item[1]
+#    for formId in writer.formsRef:
+#        # forms[formId] - work with forms for writer
+#        for lineId in forms[formId].linesRef:
+#            # lines[lineId] - work with lines for writer
+#            for wordId in lines[lineId].wordsRef:
+#                # words[wordId] - work with words for writer
