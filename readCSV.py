@@ -19,14 +19,14 @@ with open(fn) as csvfile:
             writers_filtered.append(i)
             #print " for i : %d, count is %d " % (i, writers.count(str(i)))
             countVar = countVar+1
-    print writers_filtered
-    
+    print (writers_filtered)
+
     for row in rows:
         for i in range(0, len(writers_filtered)):
             if row[1]==str(writers_filtered[i]):
                 dst = os.path.join(os.path.dirname(__file__), 'Dataset/'+row[1])
                 if not (os.path.isdir(dst)):
                     os.makedirs(dst)
-                src = os.path.join(os.path.dirname(__file__), 'forms/'+row[0]+'.png') 
-                print src          
+                src = os.path.join(os.path.dirname(__file__), 'forms/'+row[0]+'.png')
+                print (src)
                 shutil.copy(src, dst)
