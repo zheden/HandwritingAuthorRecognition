@@ -7,6 +7,9 @@ Created on Wed Jun 03 14:47:53 2015
 
 import os
 from scipy import misc
+import numpy as np
+import matplotlib.pyplot as plt
+import itertools
 
 DBpath = os.path.join(".", 'IAM')
 formsPath = os.path.join(DBpath, 'forms')
@@ -27,8 +30,8 @@ class Writer:
         self.savedSumWords = -1;
         
     def __repr__(self):
-        return ('Writer (id=%s, forms=%s, words=%s)' 
-                % (repr(self.id), repr(len(self.formsRef)), repr(self.savedSumWords) ))
+        return ('Writer (id=%s, forms=%s, lines=%s)' 
+                % (repr(self.id), repr(len(self.formsRef)), repr(self.savedSumLines) ))
     
     def sumLines(self):
         if (self.savedSumLines != -1):
@@ -118,7 +121,49 @@ class Word:
         self.data = misc.imread(fullFileName)
         
 #####################################################################
+# input - image of one line. Output: padded on top and bott, cutted on side
+def padWithZerosAndCut(i_line, i_maxHeight, i_minWidth):
+    # cut side
+    line = i_line[:, 0:i_minWidth]
+    curHeight = line.shape[0]
+    padOnTop = (i_maxHeight - curHeight) / 2
+    padOnBot = i_maxHeight - curHeight - padOnTop
+    # pad on top and bottom
+    line = np.pad(line, ((padOnTop, padOnBot), (0, 0)), mode='constant')[:, :]
+#    print line.shape
+    return line
+
 #####################################################################
+# input and output : dict (idwriter1: all his lines, idwriter2: all his lines)
+def preprocessImages(linesToTrain, minAcceptableWidth):
+    print '------'
+    print 'Preprocessing images for', len(linesToTrain), 'writers:'
+    
+    lineHeightsPerWriter = map(lambda x:map(lambda y:y.shape[0], x), linesToTrain.values())
+    lineWidthsPerWriter = map(lambda x:map(lambda y:y.shape[1], x), linesToTrain.values())
+    # flatten array to get min and max later
+    lineWidths = list(itertools.chain(*lineWidthsPerWriter))
+    lineHeights = list(itertools.chain(*lineHeightsPerWriter))
+    
+    print 'Lines with width less than ', minAcceptableWidth, 'will be rejected'
+    willBeNotRejected = [ _ for _ in itertools.compress(lineWidths, map(lambda x: x>=minAcceptableWidth, lineWidths)) ]
+    
+    maxHeight = max(lineHeights)
+    minWidth = max(minAcceptableWidth, min(willBeNotRejected))
+    print 'Width of images -', minWidth
+    print 'Height of images -', maxHeight
+    
+    # reject lines that shorter than minAcceptableWidth and pad others
+    for wId in linesToTrain.keys():
+        linesForCurWriter = len(linesToTrain[wId])
+        linesToTrain[wId] = [padWithZerosAndCut(l, maxHeight, minWidth) for l in linesToTrain[wId] if l.shape[1] > minAcceptableWidth]
+        print 'Rejected', linesForCurWriter - len(linesToTrain[wId]), 'lines for writer ', wId, '( out of',linesForCurWriter,')'
+    
+    print 'Preprocessing done'
+    return linesToTrain
+#####################################################################
+#####################################################################
+    
 writers = {}
 forms = {}
 lines = {}
@@ -195,33 +240,28 @@ for writerId in writers:
 #%%
 sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, reverse=True)
 # only 50 writers wrote more than 400 words
-print sortedWriters[0:10]
+#print sortedWriters[0:10]
 
-#test
-#words.items()[8][1].loadData(wordsPath)
-
-trainWriters = sortedWriters[0:5]
+numWritersToTrain = 5
 # load forms, lines and words images for writers
-for item in trainWriters:
+# and create dict (idwriter1: all his lines, idwriter2: all his lines)
+linesToTrain = {}
+for item in sortedWriters[1:numWritersToTrain+1]: # first wrote too much
     writer = item[1]
-    print 'Loading ', len(writer.formsRef), ' forms...'
+    linesToTrain[writer.id] = []
+    print 'Loading lines for writer ', writer.id, 'from', len(writer.formsRef), ' forms...'
     for formId in writer.formsRef:
-        forms[formId].loadData()
         for lineId in forms[formId].linesRef:
             lines[lineId].loadData()
-#            print '  Loading ', len(lines[lineId].wordsRef), ' words'
-            for wordId in lines[lineId].wordsRef:
-                words[wordId].loadData()
-                
+#            # for debug: take only few lines per writer
+#            if (len(linesToTrain[writer.id]) >= 2):
+#                continue
+            linesToTrain[writer.id].append(lines[lineId].data)
+################################################################################
 
-#%% data was read
-###########################################################################################
-## in same way images will be accessed for each writer and tuples will be created
-#for item in trainWriters:
-#    writer = item[1]
-#    for formId in writer.formsRef:
-#        # forms[formId] - work with forms for writer
-#        for lineId in forms[formId].linesRef:
-#            # lines[lineId] - work with lines for writer
-#            for wordId in lines[lineId].wordsRef:
-#                # words[wordId] - work with words for writer
+minAcceptableWidth = 1000
+linesToTrain = preprocessImages(linesToTrain, minAcceptableWidth)
+#  len(linesToTrain.items()[0][1])
+# plt.imshow(linesToTrain.items()[0][1][0])
+
+        
