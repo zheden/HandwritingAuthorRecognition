@@ -10,6 +10,9 @@ from scipy import misc
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools
+import caffe
+import lmdb
+import binascii
 
 DBpath = os.path.join(".", 'IAM')
 formsPath = os.path.join(DBpath, 'forms')
@@ -122,14 +125,14 @@ class Word:
         
 #####################################################################
 # input - image of one line. Output: padded on top and bott, cutted on side
-def padWithZerosAndCut(i_line, i_maxHeight, i_minWidth):
+def padWithOnesAndCut(i_line, i_maxHeight, i_minWidth):
     # cut side
     line = i_line[:, 0:i_minWidth]
     curHeight = line.shape[0]
     padOnTop = (i_maxHeight - curHeight) / 2
     padOnBot = i_maxHeight - curHeight - padOnTop
     # pad on top and bottom
-    line = np.pad(line, ((padOnTop, padOnBot), (0, 0)), mode='constant')[:, :]
+    line = np.pad(line, ((padOnTop, padOnBot), (0, 0)), mode='constant', constant_values=(255))[:, :]
 #    print line.shape
     return line
 
@@ -156,11 +159,71 @@ def preprocessImages(linesToTrain, minAcceptableWidth):
     # reject lines that shorter than minAcceptableWidth and pad others
     for wId in linesToTrain.keys():
         linesForCurWriter = len(linesToTrain[wId])
-        linesToTrain[wId] = [padWithZerosAndCut(l, maxHeight, minWidth) for l in linesToTrain[wId] if l.shape[1] > minAcceptableWidth]
+        linesToTrain[wId] = [padWithOnesAndCut(l, maxHeight, minWidth) for l in linesToTrain[wId] if l.shape[1] > minAcceptableWidth]
         print 'Rejected', linesForCurWriter - len(linesToTrain[wId]), 'lines for writer ', wId, '( out of',linesForCurWriter,')'
     
     print 'Preprocessing done'
     return linesToTrain
+	
+#####################################################################
+def getLMDBEntry(i_image1, i_image2, i_label):
+    datum = caffe.proto.caffe_pb2.Datum()
+    #print 'sh' , i_image1.shape
+    image = np.concatenate((i_image1, i_image2), axis=0) # top-im1, bot-im2
+    datum.channels = 1
+    datum.height = image.shape[0]
+    datum.width = image.shape[1]
+    binStr = binascii.hexlify(image)
+    datum.data = binStr
+    
+    # TODO: why it is twice wider???
+    #flatIm = np.fromstring(datum.data, dtype=np.int8)
+    #im = flatIm.reshape(datum.channels, datum.height, datum.width)
+    
+    datum.label = i_label
+    return datum
+
+#####################################################################    
+def createLMDBpairs(i_nameLMDB):
+    map_size = 10000000
+
+    env = lmdb.open(i_nameLMDB, map_size=map_size)
+
+    temp = True
+    
+    keys = linesToTrain.keys()
+    indexLineLMDB = 0
+    for i, wId in enumerate(linesToTrain):
+    #    print 'writer', wId
+        linesWi = linesToTrain[wId]
+        for il, lineWi in enumerate(linesWi):
+            
+            # make pair of similar lines
+            for iil in range(il + 1, len(linesWi)):
+                lineWii = linesWi[iil] # another line from same writer
+                # TODO move to func
+                datum = getLMDBEntry(lineWi, lineWii, 1)
+                with env.begin(write=True) as txn:
+                    str_id = '{:08}'.format(indexLineLMDB)
+                    txn.put(str_id.encode('ascii'), datum.SerializeToString()) # write to db
+                indexLineLMDB = indexLineLMDB + 1
+                if (temp):
+                    temp = False
+                    print lineWi
+                    print lineWii
+    #            print wId, ' ', wId, ': ', il, ' ', iil
+                
+            # make pair of different lines - take all from other writers           
+            for wIdj in keys[i+1:]:
+                linesWj = linesToTrain[wIdj] # lines of another author
+                for jl, lineWj in enumerate(linesWi):
+                    datum = getLMDBEntry(lineWi, lineWj, 0)
+                    with env.begin(write=True) as txn:
+                        str_id = '{:08}'.format(indexLineLMDB)
+                        txn.put(str_id.encode('ascii'), datum.SerializeToString()) # write to db
+                    indexLineLMDB = indexLineLMDB + 1
+    #                print wId, ' ', wIdj, ': ', il, ' ', jl
+    return
 #####################################################################
 #####################################################################
     
@@ -258,7 +321,7 @@ for item in sortedWriters[1:numWritersToTrain+1]: # first wrote too much
                 continue
             linesToTrain[writer.id].append(lines[lineId].data)
 ################################################################################
-
+# preprocess images
 minAcceptableWidth = 1000
 linesToTrain = preprocessImages(linesToTrain, minAcceptableWidth)
 #  len(linesToTrain.items()[0][1])
@@ -266,23 +329,27 @@ linesToTrain = preprocessImages(linesToTrain, minAcceptableWidth)
 
 ################################################################################
 #%% pack to pairs
-keys = linesToTrain.keys()
-for i, wId in enumerate(linesToTrain):
-#    print 'writer', wId
-    linesWi = linesToTrain[wId]
-    for il, lineWi in enumerate(linesWi):
-        
-        # make pair of similar lines
-        for iil in range(il + 1, len(linesWi)):
-            lineWii = linesWi[iil] # another line from same writer
-            # write to pair here (lineWi, lineWii)
-#            print wId, ' ', wId, ': ', il, ' ', iil
-            
-        # make pair of different lines - take all from other writers           
-        for wIdj in keys[i+1:]:
-            linesWj = linesToTrain[wIdj] # lines of another author
-            for jl, lineWj in enumerate(linesWi):
-                # write pair here (lineWi, lineWj)
-#                print wId, ' ', wIdj, ': ', il, ' ', jl
+print 'Packing to LMDB pairs'
+netFolder = "network"
+nameLMDB = os.path.join(netFolder, 'pairs_train_lmdb')
+createLMDBpairs(nameLMDB)
 
-        
+# to test - save one image
+env = lmdb.open(nameLMDB, readonly=True)
+with env.begin() as txn:
+    raw_datum = txn.get(b'00000000')
+
+datum = caffe.proto.caffe_pb2.Datum()
+datum.ParseFromString(raw_datum)
+
+flatIm = np.fromstring(datum.data, dtype=np.int8)
+print flatIm.shape
+# TODO: why it is twice wider????
+im = flatIm.reshape(datum.channels, datum.height, datum.width*2)
+#plt.imshow(im)
+
+import scipy
+scipy.misc.imsave('network/testPair.jpg', im[0, :, :])
+
+
+
