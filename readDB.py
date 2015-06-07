@@ -242,7 +242,7 @@ sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, revers
 # only 50 writers wrote more than 400 words
 #print sortedWriters[0:10]
 
-numWritersToTrain = 5
+numWritersToTrain = 2
 # load forms, lines and words images for writers
 # and create dict (idwriter1: all his lines, idwriter2: all his lines)
 linesToTrain = {}
@@ -253,9 +253,9 @@ for item in sortedWriters[1:numWritersToTrain+1]: # first wrote too much
     for formId in writer.formsRef:
         for lineId in forms[formId].linesRef:
             lines[lineId].loadData()
-#            # for debug: take only few lines per writer
-#            if (len(linesToTrain[writer.id]) >= 2):
-#                continue
+            # for debug: take only few lines per writer
+            if (len(linesToTrain[writer.id]) >= 2):
+                continue
             linesToTrain[writer.id].append(lines[lineId].data)
 ################################################################################
 
@@ -263,5 +263,26 @@ minAcceptableWidth = 1000
 linesToTrain = preprocessImages(linesToTrain, minAcceptableWidth)
 #  len(linesToTrain.items()[0][1])
 # plt.imshow(linesToTrain.items()[0][1][0])
+
+################################################################################
+#%% pack to pairs
+keys = linesToTrain.keys()
+for i, wId in enumerate(linesToTrain):
+#    print 'writer', wId
+    linesWi = linesToTrain[wId]
+    for il, lineWi in enumerate(linesWi):
+        
+        # make pair of similar lines
+        for iil in range(il + 1, len(linesWi)):
+            lineWii = linesWi[iil] # another line from same writer
+            # write to pair here (lineWi, lineWii)
+#            print wId, ' ', wId, ': ', il, ' ', iil
+            
+        # make pair of different lines - take all from other writers           
+        for wIdj in keys[i+1:]:
+            linesWj = linesToTrain[wIdj] # lines of another author
+            for jl, lineWj in enumerate(linesWi):
+                # write pair here (lineWi, lineWj)
+#                print wId, ' ', wIdj, ': ', il, ' ', jl
 
         
