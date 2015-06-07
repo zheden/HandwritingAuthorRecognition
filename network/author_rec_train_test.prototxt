@@ -3,7 +3,6 @@ layer {
   name: "data"
   type: "Data"
   top: "data"
-  # top: "label" - we don't have label. ok to omit this param?
   include {
     phase: TRAIN
   }

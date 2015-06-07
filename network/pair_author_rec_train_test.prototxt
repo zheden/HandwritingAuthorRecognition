@@ -1,0 +1,203 @@
+name: "AuthorRecNet"
+layer {
+  name: "pair_data"
+  type: "Data"
+  top: "pair_data"
+  top: "sim"
+  include {
+    phase: TRAIN
+  }
+  data_param {
+    source: "network/pairs_train_lmdb"
+    batch_size: 256
+    backend: LMDB
+  }
+}
+layer {
+  name: "pair_data"
+  type: "Data"
+  top: "pair_data"
+  top: "sim"
+  include {
+    phase: TEST
+  }
+  data_param {
+    source: "network/pairs_train_lmdb"
+    batch_size: 50
+    backend: LMDB
+  }
+}
+layer {
+  name: "slice_pair"
+  type: "Slice"
+  bottom: "pair_data"
+  top: "data"
+  top: "data_p"
+  slice_param {
+    slice_dim: 1
+    slice_point: 1
+  }
+}
+layer {
+  name: "pool0"
+  type: "Pooling"
+  bottom: "data"
+  top: "pool0"
+  pooling_param {
+    pool: MAX
+    kernel_w: 2
+    kernel_h: 1
+    stride_w: 2
+	stride_h: 1
+  }
+}
+layer {
+  name: "conv1"
+  type: "Convolution"
+  bottom: "pool0"
+  top: "conv1"
+  convolution_param {
+    num_output: 10
+    kernel_size: 18
+    stride: 1
+  }
+}
+layer {
+  name: "pool1"
+  type: "Pooling"
+  bottom: "conv1"
+  top: "pool1"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
+
+layer {
+  name: "conv2"
+  type: "Convolution"
+  bottom: "pool1"
+  top: "conv2"
+  convolution_param {
+    num_output: 7
+    kernel_size: 9
+    stride: 1
+  }
+}
+layer {
+  name: "pool2"
+  type: "Pooling"
+  bottom: "conv2"
+  top: "pool2"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
+layer {
+  name: "fc1"
+  type: "InnerProduct"
+  inner_product_param {
+    num_output: 256
+  }
+  bottom: "pool2"
+  top: "fc1"
+}
+layer {
+  name: "descriptor"
+  type: "InnerProduct"
+  inner_product_param {
+    num_output: 16
+  }
+  bottom: "fc1"
+  top: "descriptor"
+}
+layer {
+  name: "pool0_p"
+  type: "Pooling"
+  bottom: "data_p"
+  top: "pool0_p"
+  pooling_param {
+    pool: MAX
+    kernel_w: 2
+    kernel_h: 1
+    stride_w: 2
+	stride_h: 1
+  }
+}
+layer {
+  name: "conv1_p"
+  type: "Convolution"
+  bottom: "pool0_p"
+  top: "conv1_p"
+  convolution_param {
+    num_output: 10
+    kernel_size: 18
+    stride: 1
+  }
+}
+layer {
+  name: "pool1_p"
+  type: "Pooling"
+  bottom: "conv1_p"
+  top: "pool1_p"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
+
+layer {
+  name: "conv2_p"
+  type: "Convolution"
+  bottom: "pool1_p"
+  top: "conv2_p"
+  convolution_param {
+    num_output: 7
+    kernel_size: 9
+    stride: 1
+  }
+}
+layer {
+  name: "pool2_p"
+  type: "Pooling"
+  bottom: "conv2_p"
+  top: "pool2_p"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
+layer {
+  name: "fc1_p"
+  type: "InnerProduct"
+  inner_product_param {
+    num_output: 256
+  }
+  bottom: "pool2_p"
+  top: "fc1_p"
+}
+layer {
+  name: "descriptor_p"
+  type: "InnerProduct"
+  inner_product_param {
+    num_output: 16
+  }
+  bottom: "fc1_p"
+  top: "descriptor_p"
+}
+layer {
+  name: "loss"
+  type: "ContrastiveLoss"
+  bottom: "descriptor"
+  bottom: "descriptor_p"
+  bottom: "sim"
+  top: "loss"
+  contrastive_loss_param {
+    margin: 1
+  }
+}

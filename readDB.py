@@ -170,9 +170,10 @@ def getLMDBEntry(i_image1, i_image2, i_label):
     datum = caffe.proto.caffe_pb2.Datum()
     #print 'sh' , i_image1.shape
     image = np.concatenate((i_image1, i_image2), axis=0) # top-im1, bot-im2
-    datum.channels = 1
-    datum.height = image.shape[0]
-    datum.width = image.shape[1]
+    datum.channels = 2
+    datum.height = i_image1.shape[0]
+    datum.width = i_image1.shape[1]
+    
     binStr = binascii.hexlify(image)
     datum.data = binStr
     
@@ -185,11 +186,9 @@ def getLMDBEntry(i_image1, i_image2, i_label):
 
 #####################################################################    
 def createLMDBpairs(i_nameLMDB):
-    map_size = 10000000
+    map_size = 100000000000
 
     env = lmdb.open(i_nameLMDB, map_size=map_size)
-
-    temp = True
     
     keys = linesToTrain.keys()
     indexLineLMDB = 0
@@ -207,10 +206,6 @@ def createLMDBpairs(i_nameLMDB):
                     str_id = '{:08}'.format(indexLineLMDB)
                     txn.put(str_id.encode('ascii'), datum.SerializeToString()) # write to db
                 indexLineLMDB = indexLineLMDB + 1
-                if (temp):
-                    temp = False
-                    print lineWi
-                    print lineWii
     #            print wId, ' ', wId, ': ', il, ' ', iil
                 
             # make pair of different lines - take all from other writers           
@@ -305,7 +300,7 @@ sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, revers
 # only 50 writers wrote more than 400 words
 #print sortedWriters[0:10]
 
-numWritersToTrain = 2
+numWritersToTrain = 3
 # load forms, lines and words images for writers
 # and create dict (idwriter1: all his lines, idwriter2: all his lines)
 linesToTrain = {}
@@ -317,7 +312,7 @@ for item in sortedWriters[1:numWritersToTrain+1]: # first wrote too much
         for lineId in forms[formId].linesRef:
             lines[lineId].loadData()
             # for debug: take only few lines per writer
-            if (len(linesToTrain[writer.id]) >= 2):
+            if (len(linesToTrain[writer.id]) >= 5):
                 continue
             linesToTrain[writer.id].append(lines[lineId].data)
 ################################################################################
@@ -329,7 +324,7 @@ linesToTrain = preprocessImages(linesToTrain, minAcceptableWidth)
 
 ################################################################################
 #%% pack to pairs
-print 'Packing to LMDB pairs'
+print 'Packing to LMDB pairs...'
 netFolder = "network"
 nameLMDB = os.path.join(netFolder, 'pairs_train_lmdb')
 createLMDBpairs(nameLMDB)
@@ -337,19 +332,22 @@ createLMDBpairs(nameLMDB)
 # to test - save one image
 env = lmdb.open(nameLMDB, readonly=True)
 with env.begin() as txn:
-    raw_datum = txn.get(b'00000000')
+    raw_datum = txn.get(b'00000002')
+lmdb.close()
 
 datum = caffe.proto.caffe_pb2.Datum()
 datum.ParseFromString(raw_datum)
 
 flatIm = np.fromstring(datum.data, dtype=np.int8)
-print flatIm.shape
+#print flatIm.shape
+
 # TODO: why it is twice wider????
 im = flatIm.reshape(datum.channels, datum.height, datum.width*2)
 #plt.imshow(im)
 
 import scipy
-scipy.misc.imsave('network/testPair.jpg', im[0, :, :])
+scipy.misc.imsave('network/testPair.jpg', im[1, :, :]) # im in second channel
 
+print 'Packing finished'
 
 
