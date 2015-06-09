@@ -9,7 +9,7 @@ layer {
   }
   data_param {
     source: "network/pairs_train_lmdb"
-    batch_size: 256
+    batch_size: 25
     backend: LMDB
   }
 }
@@ -23,7 +23,7 @@ layer {
   }
   data_param {
     source: "network/pairs_train_lmdb"
-    batch_size: 50
+    batch_size: 25
     backend: LMDB
   }
 }
@@ -39,22 +39,9 @@ layer {
   }
 }
 layer {
-  name: "pool0"
-  type: "Pooling"
-  bottom: "data"
-  top: "pool0"
-  pooling_param {
-    pool: MAX
-    kernel_w: 2
-    kernel_h: 1
-    stride_w: 2
-	stride_h: 1
-  }
-}
-layer {
   name: "conv1"
   type: "Convolution"
-  bottom: "pool0"
+  bottom: "data"
   top: "conv1"
   convolution_param {
     num_output: 10
@@ -115,22 +102,9 @@ layer {
   top: "descriptor"
 }
 layer {
-  name: "pool0_p"
-  type: "Pooling"
-  bottom: "data_p"
-  top: "pool0_p"
-  pooling_param {
-    pool: MAX
-    kernel_w: 2
-    kernel_h: 1
-    stride_w: 2
-	stride_h: 1
-  }
-}
-layer {
   name: "conv1_p"
   type: "Convolution"
-  bottom: "pool0_p"
+  bottom: "data_p"
   top: "conv1_p"
   convolution_param {
     num_output: 10

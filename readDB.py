@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Jun 03 14:47:53 2015
-
-@author: Ievgeniia
-"""
 
 import os
 from scipy import misc
@@ -153,6 +147,8 @@ def preprocessImages(linesToTrain, minAcceptableWidth):
     
     maxHeight = max(lineHeights)
     minWidth = max(minAcceptableWidth, min(willBeNotRejected))
+    # temp: cut line and take first third, just to train network TODO: take all info from line
+    minWidth = minWidth / 3
     print 'Width of images -', minWidth
     print 'Height of images -', maxHeight
     
@@ -174,11 +170,9 @@ def getLMDBEntry(i_image1, i_image2, i_label):
     datum.height = i_image1.shape[0]
     datum.width = i_image1.shape[1]
     
-    binStr = binascii.hexlify(image)
-    datum.data = binStr
+    datum.data = image.tobytes()
     
-    # TODO: why it is twice wider???
-    #flatIm = np.fromstring(datum.data, dtype=np.int8)
+    #flatIm = np.fromstring(datum.data, dtype=np.uint8)
     #im = flatIm.reshape(datum.channels, datum.height, datum.width)
     
     datum.label = i_label
@@ -333,16 +327,16 @@ createLMDBpairs(nameLMDB)
 env = lmdb.open(nameLMDB, readonly=True)
 with env.begin() as txn:
     raw_datum = txn.get(b'00000002')
-lmdb.close()
 
 datum = caffe.proto.caffe_pb2.Datum()
 datum.ParseFromString(raw_datum)
 
-flatIm = np.fromstring(datum.data, dtype=np.int8)
+flatIm = np.fromstring(datum.data, dtype=np.uint8)
 #print flatIm.shape
 
 # TODO: why it is twice wider????
-im = flatIm.reshape(datum.channels, datum.height, datum.width*2)
+im = flatIm.reshape(datum.channels, datum.height, datum.width)
+
 #plt.imshow(im)
 
 import scipy
