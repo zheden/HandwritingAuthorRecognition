@@ -7,9 +7,12 @@ layer {
     phase: TRAIN
   }
   data_param {
-    source: "triplets_train_lmdb"
-    batch_size: 256
+    source: "network/triplets_train_lmdb"
+    batch_size: 25
     backend: LMDB
+  }
+  transform_param {
+    mean_file: "data/triplets_train_mean.binaryproto"
   }
 }
 layer {
@@ -20,9 +23,12 @@ layer {
     phase: TEST
   }
   data_param {
-    source: "triplets_test_lmdb"
-    batch_size: 50
+    source: "network/triplets_test_lmdb"
+    batch_size: 25
     backend: LMDB
+  }
+  transform_param {
+    mean_file: "data/triplets_test_mean.binaryproto"
   }
 }
 layer {

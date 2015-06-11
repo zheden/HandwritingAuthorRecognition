@@ -8,9 +8,13 @@ layer {
     phase: TRAIN
   }
   data_param {
-    source: "network/pairs_train_lmdb"
+    source: "data/pairs_train_lmdb"
     batch_size: 25
     backend: LMDB
+  }
+    transform_param {
+    mean_file: "data/pairs_train_mean.binaryproto"
+	scale: 0.000902447851477
   }
 }
 layer {
@@ -22,9 +26,13 @@ layer {
     phase: TEST
   }
   data_param {
-    source: "network/pairs_train_lmdb"
+    source: "data/pairs_test_lmdb"
     batch_size: 25
     backend: LMDB
+  }
+  transform_param {
+    mean_file: "data/pairs_test_mean.binaryproto"
+	scale: 0.000885045052128
   }
 }
 layer {

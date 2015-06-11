@@ -1,0 +1,70 @@
+name: "AuthorRecNet"
+input: "data"
+input_dim: 1
+input_dim: 1
+input_dim: 171 # temp width and height
+input_dim: 379
+
+layer {
+  name: "conv1"
+  type: "Convolution"
+  bottom: "data"
+  top: "conv1"
+  convolution_param {
+    num_output: 10
+    kernel_size: 18
+    stride: 1
+  }
+}
+layer {
+  name: "pool1"
+  type: "Pooling"
+  bottom: "conv1"
+  top: "pool1"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
+
+layer {
+  name: "conv2"
+  type: "Convolution"
+  bottom: "pool1"
+  top: "conv2"
+  convolution_param {
+    num_output: 7
+    kernel_size: 9
+    stride: 1
+  }
+}
+layer {
+  name: "pool2"
+  type: "Pooling"
+  bottom: "conv2"
+  top: "pool2"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
+layer {
+  name: "fc1"
+  type: "InnerProduct"
+  inner_product_param {
+    num_output: 256
+  }
+  bottom: "pool2"
+  top: "fc1"
+}
+layer {
+  name: "descriptor"
+  type: "InnerProduct"
+  inner_product_param {
+    num_output: 16
+  }
+  bottom: "fc1"
+  top: "descriptor"
+}

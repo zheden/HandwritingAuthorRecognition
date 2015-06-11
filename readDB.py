@@ -123,43 +123,56 @@ def padWithOnesAndCut(i_line, i_maxHeight, i_minWidth):
     # cut side
     line = i_line[:, 0:i_minWidth]
     curHeight = line.shape[0]
-    padOnTop = (i_maxHeight - curHeight) / 2
-    padOnBot = i_maxHeight - curHeight - padOnTop
-    # pad on top and bottom
-    line = np.pad(line, ((padOnTop, padOnBot), (0, 0)), mode='constant', constant_values=(255))[:, :]
+    if (curHeight < i_maxHeight):
+        padOnTop = (i_maxHeight - curHeight) / 2
+        padOnBot = i_maxHeight - curHeight - padOnTop
+        # pad on top and bottom
+        line = np.pad(line, ((padOnTop, padOnBot), (0, 0)), mode='constant', constant_values=(255))[:, :]
+    else:
+        line = i_line[0:i_maxHeight, 0:i_minWidth]
 #    print line.shape
     return line
 
 #####################################################################
 # input and output : dict (idwriter1: all his lines, idwriter2: all his lines)
-def preprocessImages(linesToTrain, minAcceptableWidth):
+def preprocessImages(linesToTrain, i_minAcceptableWidth, i_specificWidth = -1, i_specificHeight = -1):
     print '------'
     print 'Preprocessing images for', len(linesToTrain), 'writers:'
     
-    lineHeightsPerWriter = map(lambda x:map(lambda y:y.shape[0], x), linesToTrain.values())
-    lineWidthsPerWriter = map(lambda x:map(lambda y:y.shape[1], x), linesToTrain.values())
-    # flatten array to get min and max later
-    lineWidths = list(itertools.chain(*lineWidthsPerWriter))
-    lineHeights = list(itertools.chain(*lineHeightsPerWriter))
+    if (i_specificWidth == -1):
+        lineWidthsPerWriter = map(lambda x:map(lambda y:y.shape[1], x), linesToTrain.values())
+        lineWidths = list(itertools.chain(*lineWidthsPerWriter)) # flatten array to get min and max later
+        print 'Lines with width less than ', i_minAcceptableWidth, 'will be rejected'
+        willBeNotRejected = [ _ for _ in itertools.compress(lineWidths, map(lambda x: x>=i_minAcceptableWidth, lineWidths)) ]
+        minWidth = max(i_minAcceptableWidth, min(willBeNotRejected))
+        
+        # temp: cut line and take first third, just to train network TODO: take all info from line
+        minWidth = minWidth / 3
+    else:
+        minWidth = i_specificWidth;
+        
+    if (i_specificHeight == -1):
+        lineHeightsPerWriter = map(lambda x:map(lambda y:y.shape[0], x), linesToTrain.values())
+        lineHeights = list(itertools.chain(*lineHeightsPerWriter)) # flatten array to get min and max later
+        maxHeight = max(lineHeights)
+    else:
+        maxHeight = i_specificHeight;
     
-    print 'Lines with width less than ', minAcceptableWidth, 'will be rejected'
-    willBeNotRejected = [ _ for _ in itertools.compress(lineWidths, map(lambda x: x>=minAcceptableWidth, lineWidths)) ]
-    
-    maxHeight = max(lineHeights)
-    minWidth = max(minAcceptableWidth, min(willBeNotRejected))
-    # temp: cut line and take first third, just to train network TODO: take all info from line
-    minWidth = minWidth / 3
     print 'Width of images -', minWidth
     print 'Height of images -', maxHeight
     
+    varianceWriters = []
     # reject lines that shorter than minAcceptableWidth and pad others
+    # and calculate variance of images in this loop
     for wId in linesToTrain.keys():
         linesForCurWriter = len(linesToTrain[wId])
-        linesToTrain[wId] = [padWithOnesAndCut(l, maxHeight, minWidth) for l in linesToTrain[wId] if l.shape[1] > minAcceptableWidth]
+        linesToTrain[wId] = [padWithOnesAndCut(l, maxHeight, minWidth) for l in linesToTrain[wId] if l.shape[1] > i_minAcceptableWidth]
         print 'Rejected', linesForCurWriter - len(linesToTrain[wId]), 'lines for writer ', wId, '( out of',linesForCurWriter,')'
+        varianceWriters.append(np.var(linesToTrain[wId]))
+    variance = np.mean(varianceWriters) # scalar - variance for all images
     
     print 'Preprocessing done'
-    return linesToTrain
+    return (linesToTrain, minWidth, maxHeight, variance)
 	
 #####################################################################
 def getLMDBEntry(i_image1, i_image2, i_label):
@@ -170,7 +183,8 @@ def getLMDBEntry(i_image1, i_image2, i_label):
     datum.height = i_image1.shape[0]
     datum.width = i_image1.shape[1]
     
-    datum.data = image.tobytes()
+    binStr = image.tobytes() # binascii.hexlify
+    datum.data = binStr
     
     #flatIm = np.fromstring(datum.data, dtype=np.uint8)
     #im = flatIm.reshape(datum.channels, datum.height, datum.width)
@@ -179,16 +193,16 @@ def getLMDBEntry(i_image1, i_image2, i_label):
     return datum
 
 #####################################################################    
-def createLMDBpairs(i_nameLMDB):
+def createLMDBpairs(i_nameLMDB, i_lines):
     map_size = 100000000000
 
     env = lmdb.open(i_nameLMDB, map_size=map_size)
     
-    keys = linesToTrain.keys()
+    keys = i_lines.keys()
     indexLineLMDB = 0
-    for i, wId in enumerate(linesToTrain):
+    for i, wId in enumerate(i_lines):
     #    print 'writer', wId
-        linesWi = linesToTrain[wId]
+        linesWi = i_lines[wId]
         for il, lineWi in enumerate(linesWi):
             
             # make pair of similar lines
@@ -204,7 +218,7 @@ def createLMDBpairs(i_nameLMDB):
                 
             # make pair of different lines - take all from other writers           
             for wIdj in keys[i+1:]:
-                linesWj = linesToTrain[wIdj] # lines of another author
+                linesWj = i_lines[wIdj] # lines of another author
                 for jl, lineWj in enumerate(linesWi):
                     datum = getLMDBEntry(lineWi, lineWj, 0)
                     with env.begin(write=True) as txn:
@@ -212,6 +226,7 @@ def createLMDBpairs(i_nameLMDB):
                         txn.put(str_id.encode('ascii'), datum.SerializeToString()) # write to db
                     indexLineLMDB = indexLineLMDB + 1
     #                print wId, ' ', wIdj, ': ', il, ' ', jl
+    print '-> wrote ',indexLineLMDB, 'entried in LMDB'
     return
 #####################################################################
 #####################################################################
@@ -295,36 +310,49 @@ sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, revers
 #print sortedWriters[0:10]
 
 numWritersToTrain = 3
+numLinesToTrain = 50
+numLinesToTest = 20
 # load forms, lines and words images for writers
 # and create dict (idwriter1: all his lines, idwriter2: all his lines)
 linesToTrain = {}
+linesToTest = {}
 for item in sortedWriters[1:numWritersToTrain+1]: # first wrote too much
     writer = item[1]
     linesToTrain[writer.id] = []
+    linesToTest[writer.id] = []
     print 'Loading lines for writer ', writer.id, 'from', len(writer.formsRef), ' forms...'
+    print 'Writer\'s total lines - ', writer.sumLines()
     for formId in writer.formsRef:
         for lineId in forms[formId].linesRef:
             lines[lineId].loadData()
             # for debug: take only few lines per writer
-            if (len(linesToTrain[writer.id]) >= 5):
-                continue
-            linesToTrain[writer.id].append(lines[lineId].data)
+            if (len(linesToTrain[writer.id]) < numLinesToTrain):
+                linesToTrain[writer.id].append(lines[lineId].data)
+            elif (len(linesToTest[writer.id]) < numLinesToTest):
+                linesToTest[writer.id].append(lines[lineId].data)
+                
 ################################################################################
 # preprocess images
 minAcceptableWidth = 1000
-linesToTrain = preprocessImages(linesToTrain, minAcceptableWidth)
+(linesToTrain, lineWidth, lineHeight, varianceTrain) = preprocessImages(linesToTrain, minAcceptableWidth)
+(linesToTest, lineWidth, lineHeight, varianceTest)  = preprocessImages(linesToTest, minAcceptableWidth, lineWidth, lineHeight)
 #  len(linesToTrain.items()[0][1])
 # plt.imshow(linesToTrain.items()[0][1][0])
 
 ################################################################################
 #%% pack to pairs
+print '------'
 print 'Packing to LMDB pairs...'
-netFolder = "network"
-nameLMDB = os.path.join(netFolder, 'pairs_train_lmdb')
-createLMDBpairs(nameLMDB)
+print numLinesToTrain, 'lines for each writer will be used for creating training dataset'
+print numLinesToTest, 'lines for each writer will be used for creating testing dataset'
+dataFolder = "data"
+nameLMDBtrain = os.path.join(dataFolder, 'pairs_train_lmdb')
+createLMDBpairs(nameLMDBtrain, linesToTrain)
+nameLMDBtest = os.path.join(dataFolder, 'pairs_test_lmdb')
+createLMDBpairs(nameLMDBtest, linesToTest)
 
 # to test - save one image
-env = lmdb.open(nameLMDB, readonly=True)
+env = lmdb.open(nameLMDBtrain, readonly=True)
 with env.begin() as txn:
     raw_datum = txn.get(b'00000002')
 
@@ -336,7 +364,7 @@ flatIm = np.fromstring(datum.data, dtype=np.uint8)
 
 # TODO: why it is twice wider????
 im = flatIm.reshape(datum.channels, datum.height, datum.width)
-
+#print im.shape
 #plt.imshow(im)
 
 import scipy
@@ -344,4 +372,13 @@ scipy.misc.imsave('network/testPair.jpg', im[1, :, :]) # im in second channel
 
 print 'Packing finished'
 
-
+print '=============================='
+print '!! Before new training, dont dorget to:'
+print '1. Recalculate train and test mean'
+print '2. In train_test prototxt:'
+print '                scale for train - ', 1 / varianceTrain
+print '                scale for test - ', 1 / varianceTest
+print '!! Before predicting, dont dorget to:'
+print 'In deploy prototxt file:'
+print '                input_dim height', lineHeight
+print '                input_dim width', lineWidth
