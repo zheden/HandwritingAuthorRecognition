@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import itertools
 import caffe
 import lmdb
-import binascii
+import scipy
 
 DBpath = os.path.join(".", 'IAM')
 formsPath = os.path.join(DBpath, 'forms')
@@ -175,10 +175,10 @@ def preprocessImages(linesToTrain, i_minAcceptableWidth, i_specificWidth = -1, i
     return (linesToTrain, minWidth, maxHeight, variance)
 	
 #####################################################################
-def getLMDBEntry(i_image1, i_image2, i_label):
+def getLMDBEntryPair(i_image1, i_image2, i_label):
     datum = caffe.proto.caffe_pb2.Datum()
     #print 'sh' , i_image1.shape
-    image = np.concatenate((i_image1, i_image2), axis=0) # top-im1, bot-im2
+    image = np.concatenate((i_image1, i_image2), axis=0) # ch1 -im1, ch2 -im2
     datum.channels = 2
     datum.height = i_image1.shape[0]
     datum.width = i_image1.shape[1]
@@ -192,6 +192,19 @@ def getLMDBEntry(i_image1, i_image2, i_label):
     datum.label = i_label
     return datum
 
+#####################################################################
+def getLMDBEntryTriplet(i_image1, i_image2, i_image3):
+    datum = caffe.proto.caffe_pb2.Datum()
+    image = np.concatenate((i_image1, i_image2, i_image3), axis=0)
+    datum.channels = 3
+    datum.height = i_image1.shape[0]
+    datum.width = i_image1.shape[1]
+    
+    binStr = image.tobytes() 
+    datum.data = binStr
+    
+    return datum
+    
 #####################################################################    
 def createLMDBpairs(i_nameLMDB, i_lines):
     map_size = 100000000000
@@ -209,7 +222,7 @@ def createLMDBpairs(i_nameLMDB, i_lines):
             for iil in range(il + 1, len(linesWi)):
                 lineWii = linesWi[iil] # another line from same writer
                 # TODO move to func
-                datum = getLMDBEntry(lineWi, lineWii, 1)
+                datum = getLMDBEntryPair(lineWi, lineWii, 1)
                 with env.begin(write=True) as txn:
                     str_id = '{:08}'.format(indexLineLMDB)
                     txn.put(str_id.encode('ascii'), datum.SerializeToString()) # write to db
@@ -220,12 +233,42 @@ def createLMDBpairs(i_nameLMDB, i_lines):
             for wIdj in keys[i+1:]:
                 linesWj = i_lines[wIdj] # lines of another author
                 for jl, lineWj in enumerate(linesWj):
-                    datum = getLMDBEntry(lineWi, lineWj, 0)
+                    datum = getLMDBEntryPair(lineWi, lineWj, 0)
                     with env.begin(write=True) as txn:
                         str_id = '{:08}'.format(indexLineLMDB)
                         txn.put(str_id.encode('ascii'), datum.SerializeToString()) # write to db
                     indexLineLMDB = indexLineLMDB + 1
     #                print wId, ' ', wIdj, ': ', il, ' ', jl
+    print '-> wrote ',indexLineLMDB, 'entried in LMDB'
+    return
+    
+#####################################################################    
+# all to all
+def createLMDBtriplets(i_nameLMDB, i_lines):
+    map_size = 100000000000
+
+    env = lmdb.open(i_nameLMDB, map_size=map_size)
+    
+    keys = i_lines.keys()
+    indexLineLMDB = 0
+    for i, wId in enumerate(i_lines):
+        linesWi = i_lines[wId]  # TODO: instead of selecting line, call func that combines random words of that writer
+        # loop through lines of a writer
+        for il, lineWi in enumerate(linesWi):
+            
+            # loop through lines of same writer, starting from next
+            for iil in range(il + 1, len(linesWi)):
+                lineWii = linesWi[iil] # another line from same writer # TODO: instead of selecting line, call func that combines random words of that writer
+                
+                # loop through lines of all other writers      
+                for wIdj in keys[i+1:]:
+                    linesWj = i_lines[wIdj] # lines of another author # TODO: instead of selecting line, call func that combines random words of that writer
+                    for jl, lineWj in enumerate(linesWj):
+                        datum = getLMDBEntryTriplet(lineWi, lineWii, lineWj)
+                        with env.begin(write=True) as txn:
+                            str_id = '{:08}'.format(indexLineLMDB)
+                            txn.put(str_id.encode('ascii'), datum.SerializeToString()) # write to db
+                        indexLineLMDB = indexLineLMDB + 1
     print '-> wrote ',indexLineLMDB, 'entried in LMDB'
     return
 #####################################################################
@@ -310,8 +353,8 @@ sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, revers
 #print sortedWriters[0:10]
 
 numWritersToTrain = 3
-numLinesToTrain = 50
-numLinesToTest = 20
+numLinesToTrain = 10 #50
+numLinesToTest = 5 #20
 # load forms, lines and words images for writers
 # and create dict (idwriter1: all his lines, idwriter2: all his lines)
 linesToTrain = {}
@@ -341,16 +384,25 @@ minAcceptableWidth = 1000
 
 ################################################################################
 #%% pack to pairs
+packToTriplets = True
+dataFolder = "data"
 print '------'
-print 'Packing to LMDB pairs...'
 print numLinesToTrain, 'lines for each writer will be used for creating training dataset'
 print numLinesToTest, 'lines for each writer will be used for creating testing dataset'
-dataFolder = "data"
-nameLMDBtrain = os.path.join(dataFolder, 'pairs_train_lmdb')
-createLMDBpairs(nameLMDBtrain, linesToTrain)
-nameLMDBtest = os.path.join(dataFolder, 'pairs_test_lmdb')
-createLMDBpairs(nameLMDBtest, linesToTest)
+if (not packToTriplets):
+    print 'Packing to LMDB pairs...'
+    nameLMDBtrain = os.path.join(dataFolder, 'pairs_train_lmdb')
+    createLMDBpairs(nameLMDBtrain, linesToTrain)
+    nameLMDBtest = os.path.join(dataFolder, 'pairs_test_lmdb')
+    createLMDBpairs(nameLMDBtest, linesToTest)
+else:
+    print 'Packing to LMDB triplets...'
+    nameLMDBtrain = os.path.join(dataFolder, 'triplets_train_lmdb')
+    createLMDBtriplets(nameLMDBtrain, linesToTrain)
+    nameLMDBtest = os.path.join(dataFolder, 'triplets_test_lmdb')
+    createLMDBtriplets(nameLMDBtest, linesToTest)
 
+################################################################################
 # to test - save one image
 env = lmdb.open(nameLMDBtrain, readonly=True)
 with env.begin() as txn:
@@ -360,19 +412,15 @@ datum = caffe.proto.caffe_pb2.Datum()
 datum.ParseFromString(raw_datum)
 
 flatIm = np.fromstring(datum.data, dtype=np.uint8)
-#print flatIm.shape
-
 im = flatIm.reshape(datum.channels, datum.height, datum.width)
-#print im.shape
-#plt.imshow(im)
 
-import scipy
+
 scipy.misc.imsave('network/testPair.jpg', im[1, :, :]) # im in second channel
 
 print 'Packing finished'
 
 print '=============================='
-print '!! Before new training, dont dorget to:'
+print '!! Before new training, dont forget to:'
 print '1. Recalculate train and test mean'
 print '2. In train_test prototxt:'
 print '                scale for train - ', 1 / varianceTrain
