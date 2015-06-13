@@ -5,7 +5,7 @@ net: "network/pair_author_rec_train_test.prototxt"
 # covering the full 10,000 testing images.  EVG was 100
 test_iter: 100
 # Carry out testing every 500 training iterations.
-test_interval: 500
+test_interval: 20
 # The base learning rate, momentum and the weight decay of the network.
 # mult by sqrt(10) because of batch size
 base_lr: 0.04
@@ -17,12 +17,12 @@ lr_policy: "step"
 gamma: 0.1
 # step milt by 10 because of batch size
 stepsize: 1000000
-# Display every 100 iterations
-display: 100
+# Display every 
+display: 20
 # The maximum number of iterations, EVG was 50000 in mnist
-max_iter: 5000
+max_iter: 1000
 # snapshot intermediate results
-snapshot: 1000
-snapshot_prefix: "network/snap_pair_author_rec"
+snapshot: 100
+snapshot_prefix: "network/snap/snap_pair_author_rec"
 # solver mode: CPU or GPU
 solver_mode: GPU

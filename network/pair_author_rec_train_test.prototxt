@@ -53,7 +53,7 @@ layer {
   top: "conv1"
   convolution_param {
     num_output: 10
-    kernel_size: 18
+    kernel_size: 8
     stride: 1
   }
 }
@@ -116,7 +116,7 @@ layer {
   top: "conv1_p"
   convolution_param {
     num_output: 10
-    kernel_size: 18
+    kernel_size: 8
     stride: 1
   }
 }

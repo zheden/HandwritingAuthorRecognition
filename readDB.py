@@ -219,7 +219,7 @@ def createLMDBpairs(i_nameLMDB, i_lines):
             # make pair of different lines - take all from other writers           
             for wIdj in keys[i+1:]:
                 linesWj = i_lines[wIdj] # lines of another author
-                for jl, lineWj in enumerate(linesWi):
+                for jl, lineWj in enumerate(linesWj):
                     datum = getLMDBEntry(lineWi, lineWj, 0)
                     with env.begin(write=True) as txn:
                         str_id = '{:08}'.format(indexLineLMDB)
@@ -362,7 +362,6 @@ datum.ParseFromString(raw_datum)
 flatIm = np.fromstring(datum.data, dtype=np.uint8)
 #print flatIm.shape
 
-# TODO: why it is twice wider????
 im = flatIm.reshape(datum.channels, datum.height, datum.width)
 #print im.shape
 #plt.imshow(im)

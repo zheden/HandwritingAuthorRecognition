@@ -5,6 +5,7 @@ input_dim: 1
 input_dim: 171 # temp width and height
 input_dim: 379
 
+
 layer {
   name: "conv1"
   type: "Convolution"
@@ -12,7 +13,7 @@ layer {
   top: "conv1"
   convolution_param {
     num_output: 10
-    kernel_size: 18
+    kernel_size: 8
     stride: 1
   }
 }
