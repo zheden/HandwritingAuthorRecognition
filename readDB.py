@@ -123,14 +123,19 @@ def padWithOnesAndCut(i_line, i_maxHeight, i_minWidth):
     # cut side
     line = i_line[:, 0:i_minWidth]
     curHeight = line.shape[0]
-    if (curHeight < i_maxHeight):
+    if (curHeight <= i_maxHeight):
         padOnTop = (i_maxHeight - curHeight) / 2
         padOnBot = i_maxHeight - curHeight - padOnTop
         # pad on top and bottom
         line = np.pad(line, ((padOnTop, padOnBot), (0, 0)), mode='constant', constant_values=(255))[:, :]
     else:
-        line = i_line[0:i_maxHeight, 0:i_minWidth]
-#    print line.shape
+        # cut bot, top
+        d = (curHeight - i_maxHeight) / 2;
+        if (d > 0):
+            line = i_line[d:-d, 0:i_minWidth]
+        if (line.shape[0] <> i_maxHeight): # can be larger 1 pix
+            line = line[0:-1, :]
+    line = np.array(255 * np.ones(line.shape) - line, dtype=np.uint8) # invert
     return line
 
 #####################################################################
@@ -146,15 +151,15 @@ def preprocessImages(linesToTrain, i_minAcceptableWidth, i_specificWidth = -1, i
         willBeNotRejected = [ _ for _ in itertools.compress(lineWidths, map(lambda x: x>=i_minAcceptableWidth, lineWidths)) ]
         minWidth = max(i_minAcceptableWidth, min(willBeNotRejected))
         
-        # temp: cut line and take first third, just to train network TODO: take all info from line
-        minWidth = minWidth / 3
+        # TEMP: TODO remove after we will have words concatenations
+        minWidth = 300
     else:
         minWidth = i_specificWidth;
         
     if (i_specificHeight == -1):
         lineHeightsPerWriter = map(lambda x:map(lambda y:y.shape[0], x), linesToTrain.values())
         lineHeights = list(itertools.chain(*lineHeightsPerWriter)) # flatten array to get min and max later
-        maxHeight = max(lineHeights)
+        maxHeight = sum(lineHeights) / len(lineHeights) # mean height
     else:
         maxHeight = i_specificHeight;
     
@@ -177,17 +182,19 @@ def preprocessImages(linesToTrain, i_minAcceptableWidth, i_specificWidth = -1, i
 #####################################################################
 def getLMDBEntryPair(i_image1, i_image2, i_label):
     datum = caffe.proto.caffe_pb2.Datum()
-    #print 'sh' , i_image1.shape
-    image = np.concatenate((i_image1, i_image2), axis=0) # ch1 -im1, ch2 -im2
+    image = np.dstack((i_image1, i_image2)) # ch1 -im1, ch2 -im2
+    
+    image = image.swapaxes(0, 2).swapaxes(1, 2) # (ch, h, w)
+    
     datum.channels = 2
     datum.height = i_image1.shape[0]
     datum.width = i_image1.shape[1]
     
-    binStr = image.tobytes() # binascii.hexlify
+    binStr = image.tobytes()
     datum.data = binStr
     
     #flatIm = np.fromstring(datum.data, dtype=np.uint8)
-    #im = flatIm.reshape(datum.channels, datum.height, datum.width)
+    #im = flatIm.reshape(datum.height, datum.width, datum.channels)
     
     datum.label = i_label
     return datum
@@ -195,7 +202,9 @@ def getLMDBEntryPair(i_image1, i_image2, i_label):
 #####################################################################
 def getLMDBEntryTriplet(i_image1, i_image2, i_image3):
     datum = caffe.proto.caffe_pb2.Datum()
-    image = np.concatenate((i_image1, i_image2, i_image3), axis=0)
+    image = np.dstack((i_image1, i_image2, i_image3)) # ch1 -im1, ch2 -im2, ch3 -im3
+    image = image.swapaxes(0, 2).swapaxes(1, 2) # (ch, h, w)
+    
     datum.channels = 3
     datum.height = i_image1.shape[0]
     datum.width = i_image1.shape[1]
@@ -207,11 +216,12 @@ def getLMDBEntryTriplet(i_image1, i_image2, i_image3):
     
 #####################################################################    
 def createLMDBpairs(i_nameLMDB, i_lines):
-    map_size = 100000000000
+    map_size = 100000000000 # TODO use deepdish instead of this ugly num http://deepdish.io/2015/04/28/creating-lmdb-in-python/
 
     env = lmdb.open(i_nameLMDB, map_size=map_size)
     
     keys = i_lines.keys()
+    numWriters = len(keys)
     indexLineLMDB = 0
     for i, wId in enumerate(i_lines):
     #    print 'writer', wId
@@ -219,9 +229,9 @@ def createLMDBpairs(i_nameLMDB, i_lines):
         for il, lineWi in enumerate(linesWi):
             
             # make pair of similar lines
-            for iil in range(il + 1, len(linesWi)):
+            numLinesWi = len(linesWi)
+            for iil in range(il + 1, numLinesWi):
                 lineWii = linesWi[iil] # another line from same writer
-                # TODO move to func
                 datum = getLMDBEntryPair(lineWi, lineWii, 1)
                 with env.begin(write=True) as txn:
                     str_id = '{:08}'.format(indexLineLMDB)
@@ -231,8 +241,12 @@ def createLMDBpairs(i_nameLMDB, i_lines):
                 
             # make pair of different lines - take all from other writers           
             for wIdj in keys[i+1:]:
+                counterLinesWj = 0
                 linesWj = i_lines[wIdj] # lines of another author
                 for jl, lineWj in enumerate(linesWj):
+                    counterLinesWj = counterLinesWj + 1
+                    if (counterLinesWj > numLinesWi / numWriters): # to have ~ equal num of 0 and 1 labels
+                        break
                     datum = getLMDBEntryPair(lineWi, lineWj, 0)
                     with env.begin(write=True) as txn:
                         str_id = '{:08}'.format(indexLineLMDB)
@@ -353,8 +367,8 @@ sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, revers
 #print sortedWriters[0:10]
 
 numWritersToTrain = 3
-numLinesToTrain = 10 #50
-numLinesToTest = 5 #20
+numLinesToTrain = 6
+numLinesToTest = 2
 # load forms, lines and words images for writers
 # and create dict (idwriter1: all his lines, idwriter2: all his lines)
 linesToTrain = {}
@@ -370,13 +384,14 @@ for item in sortedWriters[1:numWritersToTrain+1]: # first wrote too much
             lines[lineId].loadData()
             # for debug: take only few lines per writer
             if (len(linesToTrain[writer.id]) < numLinesToTrain):
-                linesToTrain[writer.id].append(lines[lineId].data)
+                linesToTrain[writer.id].append(lines[lineId].data[:, 0:lines[lineId].data.shape[1]/2])
+                linesToTrain[writer.id].append(lines[lineId].data[:, lines[lineId].data.shape[1]/2:-1]) # TEMP TODO remove after we will have words concatenations
             elif (len(linesToTest[writer.id]) < numLinesToTest):
                 linesToTest[writer.id].append(lines[lineId].data)
                 
 ################################################################################
 # preprocess images
-minAcceptableWidth = 1000
+minAcceptableWidth = 500
 (linesToTrain, lineWidth, lineHeight, varianceTrain) = preprocessImages(linesToTrain, minAcceptableWidth)
 (linesToTest, lineWidth, lineHeight, varianceTest)  = preprocessImages(linesToTest, minAcceptableWidth, lineWidth, lineHeight)
 #  len(linesToTrain.items()[0][1])
@@ -384,7 +399,7 @@ minAcceptableWidth = 1000
 
 ################################################################################
 #%% pack to pairs
-packToTriplets = True
+packToTriplets = False
 dataFolder = "data"
 print '------'
 print numLinesToTrain, 'lines for each writer will be used for creating training dataset'

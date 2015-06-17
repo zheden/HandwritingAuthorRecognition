@@ -14,7 +14,7 @@ layer {
   }
     transform_param {
     mean_file: "data/pairs_train_mean.binaryproto"
-	scale: 0.000902447851477
+	scale: 0.0039
   }
 }
 layer {
@@ -32,7 +32,7 @@ layer {
   }
   transform_param {
     mean_file: "data/pairs_test_mean.binaryproto"
-	scale: 0.000885045052128
+	scale: 0.0039
   }
 }
 layer {
@@ -50,11 +50,16 @@ layer {
   name: "conv1"
   type: "Convolution"
   bottom: "data"
+  bottom: "data_p"
   top: "conv1"
+  top: "conv1_p"
   convolution_param {
-    num_output: 10
-    kernel_size: 8
+    num_output: 18
+    kernel_size: 4
     stride: 1
+	weight_filler {
+      type: "xavier"
+    }
   }
 }
 layer {
@@ -68,16 +73,32 @@ layer {
     stride: 2
   }
 }
+layer {
+  name: "pool1_p"
+  type: "Pooling"
+  bottom: "conv1_p"
+  top: "pool1_p"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
 
 layer {
   name: "conv2"
   type: "Convolution"
   bottom: "pool1"
+  bottom: "pool1_p"
   top: "conv2"
+  top: "conv2_p"
   convolution_param {
     num_output: 7
-    kernel_size: 9
+    kernel_size: 3
     stride: 1
+	weight_filler {
+      type: "xavier"
+    }
   }
 }
 layer {
@@ -85,6 +106,17 @@ layer {
   type: "Pooling"
   bottom: "conv2"
   top: "pool2"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
+layer {
+  name: "pool2_p"
+  type: "Pooling"
+  bottom: "conv2_p"
+  top: "pool2_p"
   pooling_param {
     pool: MAX
     kernel_size: 2
@@ -108,51 +140,6 @@ layer {
   }
   bottom: "fc1"
   top: "descriptor"
-}
-layer {
-  name: "conv1_p"
-  type: "Convolution"
-  bottom: "data_p"
-  top: "conv1_p"
-  convolution_param {
-    num_output: 10
-    kernel_size: 8
-    stride: 1
-  }
-}
-layer {
-  name: "pool1_p"
-  type: "Pooling"
-  bottom: "conv1_p"
-  top: "pool1_p"
-  pooling_param {
-    pool: MAX
-    kernel_size: 2
-    stride: 2
-  }
-}
-
-layer {
-  name: "conv2_p"
-  type: "Convolution"
-  bottom: "pool1_p"
-  top: "conv2_p"
-  convolution_param {
-    num_output: 7
-    kernel_size: 9
-    stride: 1
-  }
-}
-layer {
-  name: "pool2_p"
-  type: "Pooling"
-  bottom: "conv2_p"
-  top: "pool2_p"
-  pooling_param {
-    pool: MAX
-    kernel_size: 2
-    stride: 2
-  }
 }
 layer {
   name: "fc1_p"
