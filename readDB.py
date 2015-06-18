@@ -7,6 +7,8 @@ import itertools
 import caffe
 import lmdb
 import scipy
+from PIL import Image
+import itertools
 
 DBpath = os.path.join(".", 'IAM')
 formsPath = os.path.join(DBpath, 'forms')
@@ -16,6 +18,7 @@ asciiPath = os.path.join(DBpath, 'ascii')
 formsFile = os.path.join(asciiPath, 'forms.txt')
 linesFile = os.path.join(asciiPath, 'lines.txt')
 wordsFile = os.path.join(asciiPath, 'words.txt')
+newLinesPath = os.path.join(DBpath, 'new lines')
 
 #####################################################################
 class Writer:
@@ -27,9 +30,9 @@ class Writer:
         self.savedSumWords = -1;
         
     def __repr__(self):
-        return ('Writer (id=%s, forms=%s, lines=%s)' 
-                % (repr(self.id), repr(len(self.formsRef)), repr(self.savedSumLines) ))
-    
+        return ('Writer (id=%s, forms=%s, lines=%s, words=%s)'
+                % (repr(self.id), repr(len(self.formsRef)), repr(self.savedSumLines), repr(self.savedSumWords) ))
+
     def sumLines(self):
         if (self.savedSumLines != -1):
             return self.savedSumLines
@@ -78,13 +81,14 @@ class Form:
  
 #####################################################################       
 class Line:
-    
-    def __init__(self, i_id = '', i_label = ''):
+
+    def __init__(self, i_id = '', i_label = '', i_boundingBox = ()):
         self.id = i_id
         self.wordsRef = []
         self.label = i_label
         self.data = []
-        
+        self.boundingBox = i_boundingBox
+
     def sumWords(self):
         return len(self.wordsRef)
         
@@ -101,11 +105,12 @@ class Line:
 
 #####################################################################        
 class Word:
-    def __init__(self, i_id = '', i_label = ''):
+    def __init__(self, i_id = '', i_label = '', i_boundingBox = ()):
         self.id = i_id
         self.label = i_label
         self.data = []
-        
+        self.boundingBox = i_boundingBox
+
     def __repr__(self):
         return ('Word (id=%s, label=%s)' 
                 % (repr(self.id),  repr(self.label)))
@@ -178,7 +183,46 @@ def preprocessImages(linesToTrain, i_minAcceptableWidth, i_specificWidth = -1, i
     
     print 'Preprocessing done'
     return (linesToTrain, minWidth, maxHeight, variance)
-	
+
+def applyPermutations(wordsInLine, lineSample, writerSample):
+    wordGroupId = -1
+    for wordGroup in itertools.permutations(wordsInLine, len(wordsInLine)):
+        wordGroupId += 1
+        #print wordGroup
+        # initializing new bounding box for line in which words will be pasted
+        outerBox = np.empty((MAX_HEIGHT, MAX_WIDTH))
+        outerBox.fill(255)
+        img = Image.fromarray(outerBox) # creating empty image from bounding box array
+        xPixelsCovered = 0 # to set x position of new word added to the line
+        wordsCount = 0
+        for word in wordGroup:
+            wordsCount += 1
+            #print word
+            words[word].loadData() # load image data
+            #print words[word].boundingBox
+            yStartPos = words[word].boundingBox[1]-lineBoundingBox[1] # calculate a word's starting position on Y axis in bounding box
+            wordImg = Image.fromarray(words[word].data) # Load word's image data
+            img.paste(wordImg, (xPixelsCovered,yStartPos))
+            xPixelsCovered += wordImg.size[0] + 10 # 10 extra pixels added to create emtpy space between words
+            #print xPixelsCovered
+
+        #img.show()
+        saveToDisk(wordGroupId, img, lineSample, writerSample)
+
+def saveToDisk(wordGroupId, img, lineSample, writerSample):
+    # Saving details to a text file
+    with open(asciiPath + '/new lines.txt', 'a') as file:
+        file.write(lineSample + '-' + str(wordGroupId) + '-' + str(writerSample[0]) + '\n')
+
+    # OPTIONAL..!!! Saving new line images to disk
+
+    img = img.convert('RGB')
+    directory = newLinesPath + '/' + str(writerSample[0])
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    newFilePath = directory + '/' + lineSample + '_' + str(wordGroupId) + '.png'
+    img.save(newFilePath) # save to disk
+
 #####################################################################
 def getLMDBEntryPair(i_image1, i_image2, i_label):
     datum = caffe.proto.caffe_pb2.Datum()
@@ -328,9 +372,13 @@ for line in f:
     columns = line.split()
     lineId = columns[0]
     label = columns[8]
+    boundingBoxX = int(columns[4])
+    boundingBoxY = int(columns[5])
+    boundingBoxWidth = int(columns[6])
+    boundingBoxHeight = int(columns[7])
 
-    lines[lineId] = Line(lineId, label)
-    
+    lines[lineId] = Line(lineId, label, (boundingBoxX, boundingBoxY, boundingBoxWidth, boundingBoxHeight))
+
     # add this line to corresponding form
     formId = lineId[0:-3]
     forms[formId].linesRef.append(lineId)
@@ -347,11 +395,15 @@ for line in f:
     columns = line.split()
     wordId = columns[0]
     label = columns[8]
+    boundingBoxX = int(columns[3])
+    boundingBoxY = int(columns[4])
+    boundingBoxWidth = int(columns[5])
+    boundingBoxHeight = int(columns[6])
 
-    words[wordId] = Word(wordId, label)
-    
-#    print wordId
-    
+    words[wordId] = Word(wordId, label, (boundingBoxX, boundingBoxY, boundingBoxWidth, boundingBoxHeight))
+
+    #print 'wordId : ' + wordId
+
     # add this word to corresponding line
     lineId = wordId[0:-3]
     lines[lineId].wordsRef.append(wordId)
@@ -360,11 +412,66 @@ f.close()
 #%% save how num of Lines and words
 for writerId in writers:
     writers[writerId].calculateAnsSaveSums()
-    
+
 #%%
 sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, reverse=True)
 # only 50 writers wrote more than 400 words
 #print sortedWriters[0:10]
+
+############################ Concatenating words to form lines ######################################
+MAX_WRITERS = 3
+MAX_FORMS = 2
+MAX_LINES = 2
+# Maximum allowed HxW of lines to be formed
+MAX_WIDTH = 500
+MAX_HEIGHT = 120
+
+writersCount = 0
+for writerSample in sortedWriters:
+    if writerSample[0] == 0: # Ignore first writer who wrote too much
+        continue
+    writersCount += 1
+    if writersCount > MAX_WRITERS:
+        break
+    print writerSample[1]
+    writerForms = writerSample[1].formsRef
+    #print writerForms
+    formsCount = 0
+    for formSample in writerForms:
+        formsCount += 1
+        if formsCount > MAX_FORMS:
+            break
+        print forms[formSample]
+        formLines = forms[formSample].linesRef
+        linesCount = 0
+        for lineSample in formLines:
+            linesCount += 1
+            if linesCount > MAX_LINES:
+                break
+            print lineSample
+            wordsInLine = lines[lineSample].wordsRef
+
+            total_width = 0 # to keep track of total width of line formed so far, so that it doesn't exceed MAX_WIDTH
+            word_count = 0 # to count number of words considered to be included in line
+            for word in wordsInLine:
+                wordWidth = words[word].boundingBox[2]
+                total_width += wordWidth
+                word_count += 1
+                if total_width > MAX_WIDTH:
+                    break
+
+            MAX_WORDS = word_count
+            if len(wordsInLine) > MAX_WORDS:
+                wordsInLine = wordsInLine[0:MAX_WORDS]
+            lineBoundingBox = lines[lineSample].boundingBox
+            #print lineBoundingBox
+
+            # Applying all words permutations possible to form lines
+            applyPermutations(wordsInLine, lineSample, writerSample)
+
+###########################################################################
+
+
 
 numWritersToTrain = 3
 numLinesToTrain = 6
