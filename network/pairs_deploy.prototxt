@@ -2,9 +2,8 @@ name: "AuthorRecNet"
 input: "data"
 input_dim: 1
 input_dim: 1
-input_dim: 171 # temp width and height
-input_dim: 379
-
+input_dim: 105
+input_dim: 300
 
 layer {
   name: "conv1"
@@ -12,8 +11,8 @@ layer {
   bottom: "data"
   top: "conv1"
   convolution_param {
-    num_output: 10
-    kernel_size: 8
+    num_output: 18
+    kernel_size: 4
     stride: 1
   }
 }
@@ -36,7 +35,7 @@ layer {
   top: "conv2"
   convolution_param {
     num_output: 7
-    kernel_size: 9
+    kernel_size: 3
     stride: 1
   }
 }
