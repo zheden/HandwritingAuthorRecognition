@@ -464,11 +464,10 @@ for writerSample in sortedWriters:
                 if total_width > MAX_WIDTH:
                     break
             
-            # Evg @Nishant: looks like you get only first words from line, whose total width is ok
-            # in this case if the line is 1500, MAX_WIDTH is 500, last words will never appear in our dataset
             MAX_WORDS = word_count
             if len(wordsIdsInLine) > MAX_WORDS:
-                wordsIdsInLine = wordsIdsInLine[0:MAX_WORDS]
+                wordsInLine = np.random.choice(wordsInLine, MAX_WORDS, replace=False) # pick words randomly from a line
+				#wordsIdsInLine = wordsIdsInLine[0:MAX_WORDS]
 
             # Applying all words permutations possible to form lines
             linesWithWordPermutations = applyPermutations(wordsIdsInLine, lineSample, writerSample, MAX_NUM_WORDS_PERMITATIONS)
