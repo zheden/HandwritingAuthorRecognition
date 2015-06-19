@@ -9,6 +9,7 @@ import lmdb
 import scipy
 from PIL import Image
 import itertools
+import shutil
 
 DBpath = os.path.join(".", 'IAM')
 formsPath = os.path.join(DBpath, 'forms')
@@ -124,20 +125,18 @@ class Word:
         
 #####################################################################
 # input - image of one line. Output: padded on top and bott, cutted on side
-def padWithOnesAndCut(i_line, i_maxHeight, i_minWidth):
-    # cut side
-    line = i_line[:, 0:i_minWidth]
+def padWithOnesOrCut(line, i_maxHeight):
     curHeight = line.shape[0]
     if (curHeight <= i_maxHeight):
+        # pad on top and bottom
         padOnTop = (i_maxHeight - curHeight) / 2
         padOnBot = i_maxHeight - curHeight - padOnTop
-        # pad on top and bottom
         line = np.pad(line, ((padOnTop, padOnBot), (0, 0)), mode='constant', constant_values=(255))[:, :]
     else:
-        # cut bot, top
+        # cut on top and bottom
         d = (curHeight - i_maxHeight) / 2;
         if (d > 0):
-            line = i_line[d:-d, 0:i_minWidth]
+            line = line[d:-d, :]
         if (line.shape[0] <> i_maxHeight): # can be larger 1 pix
             line = line[0:-1, :]
     line = np.array(255 * np.ones(line.shape) - line, dtype=np.uint8) # invert
@@ -145,21 +144,8 @@ def padWithOnesAndCut(i_line, i_maxHeight, i_minWidth):
 
 #####################################################################
 # input and output : dict (idwriter1: all his lines, idwriter2: all his lines)
-def preprocessImages(linesToTrain, i_minAcceptableWidth, i_specificWidth = -1, i_specificHeight = -1):
-    print '------'
+def preprocessImages(linesToTrain, i_specificHeight = -1):
     print 'Preprocessing images for', len(linesToTrain), 'writers:'
-    
-    if (i_specificWidth == -1):
-        lineWidthsPerWriter = map(lambda x:map(lambda y:y.shape[1], x), linesToTrain.values())
-        lineWidths = list(itertools.chain(*lineWidthsPerWriter)) # flatten array to get min and max later
-        print 'Lines with width less than ', i_minAcceptableWidth, 'will be rejected'
-        willBeNotRejected = [ _ for _ in itertools.compress(lineWidths, map(lambda x: x>=i_minAcceptableWidth, lineWidths)) ]
-        minWidth = max(i_minAcceptableWidth, min(willBeNotRejected))
-        
-        # TEMP: TODO remove after we will have words concatenations
-        minWidth = 300
-    else:
-        minWidth = i_specificWidth;
         
     if (i_specificHeight == -1):
         lineHeightsPerWriter = map(lambda x:map(lambda y:y.shape[0], x), linesToTrain.values())
@@ -168,46 +154,50 @@ def preprocessImages(linesToTrain, i_minAcceptableWidth, i_specificWidth = -1, i
     else:
         maxHeight = i_specificHeight;
     
-    print 'Width of images -', minWidth
     print 'Height of images -', maxHeight
     
     varianceWriters = []
-    # reject lines that shorter than minAcceptableWidth and pad others
-    # and calculate variance of images in this loop
+    # calculate variance of images TODO: remove if will not use
     for wId in linesToTrain.keys():
-        linesForCurWriter = len(linesToTrain[wId])
-        linesToTrain[wId] = [padWithOnesAndCut(l, maxHeight, minWidth) for l in linesToTrain[wId] if l.shape[1] > i_minAcceptableWidth]
-        print 'Rejected', linesForCurWriter - len(linesToTrain[wId]), 'lines for writer ', wId, '( out of',linesForCurWriter,')'
+        linesToTrain[wId] = [padWithOnesOrCut(l, maxHeight) for l in linesToTrain[wId]]
         varianceWriters.append(np.var(linesToTrain[wId]))
     variance = np.mean(varianceWriters) # scalar - variance for all images
     
     print 'Preprocessing done'
-    return (linesToTrain, minWidth, maxHeight, variance)
+    return (linesToTrain, maxHeight, variance)
 
-def applyPermutations(wordsInLine, lineSample, writerSample):
+#####################################################################
+def applyPermutations(wordsIdsInLine, lineSample, writerSample, maxNumPermutations):
     wordGroupId = -1
-    for wordGroup in itertools.permutations(wordsInLine, len(wordsInLine)):
+    outputLines = []
+    numPermutations = 0
+    lineBoundingBox = lines[lineSample].boundingBox
+    for wordIdsGroup in itertools.permutations(wordsIdsInLine, len(wordsIdsInLine)):
+        if (numPermutations >= maxNumPermutations):
+            break
         wordGroupId += 1
-        #print wordGroup
+        #print wordIdsGroup
         # initializing new bounding box for line in which words will be pasted
-        outerBox = np.empty((MAX_HEIGHT, MAX_WIDTH))
+        outerBox = np.empty((lineBoundingBox[3], MAX_WIDTH)) # padding/cutting on top and bottom is done later
         outerBox.fill(255)
         img = Image.fromarray(outerBox) # creating empty image from bounding box array
         xPixelsCovered = 0 # to set x position of new word added to the line
         wordsCount = 0
-        for word in wordGroup:
+        for wordId in wordIdsGroup:
             wordsCount += 1
             #print word
-            words[word].loadData() # load image data
             #print words[word].boundingBox
-            yStartPos = words[word].boundingBox[1]-lineBoundingBox[1] # calculate a word's starting position on Y axis in bounding box
-            wordImg = Image.fromarray(words[word].data) # Load word's image data
+            yStartPos = words[wordId].boundingBox[1]-lineBoundingBox[1] # calculate a word's starting position on Y axis in bounding box
+            wordImg = Image.fromarray(words[wordId].data) # Load word's image data
             img.paste(wordImg, (xPixelsCovered,yStartPos))
-            xPixelsCovered += wordImg.size[0] + 10 # 10 extra pixels added to create emtpy space between words
+            xPixelsCovered += wordImg.size[0] + 20 # 20 extra pixels added to create emtpy space between words
             #print xPixelsCovered
 
         #img.show()
         saveToDisk(wordGroupId, img, lineSample, writerSample)
+        outputLines.append(np.array(img))
+        numPermutations += 1
+    return outputLines
 
 def saveToDisk(wordGroupId, img, lineSample, writerSample):
     # Saving details to a text file
@@ -262,6 +252,7 @@ def getLMDBEntryTriplet(i_image1, i_image2, i_image3):
 def createLMDBpairs(i_nameLMDB, i_lines):
     map_size = 100000000000 # TODO use deepdish instead of this ugly num http://deepdish.io/2015/04/28/creating-lmdb-in-python/
 
+    shutil.rmtree(i_nameLMDB, True)
     env = lmdb.open(i_nameLMDB, map_size=map_size)
     
     keys = i_lines.keys()
@@ -298,6 +289,7 @@ def createLMDBpairs(i_nameLMDB, i_lines):
                     indexLineLMDB = indexLineLMDB + 1
     #                print wId, ' ', wIdj, ': ', il, ' ', jl
     print '-> wrote ',indexLineLMDB, 'entried in LMDB'
+    env.close()
     return
     
 #####################################################################    
@@ -305,6 +297,7 @@ def createLMDBpairs(i_nameLMDB, i_lines):
 def createLMDBtriplets(i_nameLMDB, i_lines):
     map_size = 100000000000
 
+    shutil.rmtree(i_nameLMDB, True)
     env = lmdb.open(i_nameLMDB, map_size=map_size)
     
     keys = i_lines.keys()
@@ -328,10 +321,12 @@ def createLMDBtriplets(i_nameLMDB, i_lines):
                             txn.put(str_id.encode('ascii'), datum.SerializeToString()) # write to db
                         indexLineLMDB = indexLineLMDB + 1
     print '-> wrote ',indexLineLMDB, 'entried in LMDB'
+    env.close()
     return
 #####################################################################
 #####################################################################
-    
+print '----------------------------------------------------------------------------'
+print '----------------------------------------------------------------------------'  
 writers = {}
 forms = {}
 lines = {}
@@ -415,16 +410,22 @@ for writerId in writers:
 
 #%%
 sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, reverse=True)
-# only 50 writers wrote more than 400 words
-#print sortedWriters[0:10]
 
 ############################ Concatenating words to form lines ######################################
 MAX_WRITERS = 3
-MAX_FORMS = 2
-MAX_LINES = 2
-# Maximum allowed HxW of lines to be formed
+MAX_FORMS = 20
+# Maximum allowed width of lines to be formed, height is mean value for all heights
 MAX_WIDTH = 500
-MAX_HEIGHT = 120
+
+MAX_LINES_TO_TRAIN = 2 # NOTE: this is number without permutations
+MAX_LINES_TO_TEST = 2
+MAX_NUM_WORDS_PERMITATIONS = 10
+
+linesToTrain = {} # dict (idwriter1: all his lines, idwriter2: all his lines)
+linesToTest = {}
+
+numLinesToTrain = 0 # counters how many lines we created for all writers
+numLinesToTest = 0
 
 writersCount = 0
 for writerSample in sortedWriters:
@@ -433,74 +434,74 @@ for writerSample in sortedWriters:
     writersCount += 1
     if writersCount > MAX_WRITERS:
         break
-    print writerSample[1]
-    writerForms = writerSample[1].formsRef
+    writer = writerSample[1]
+    linesToTrain[writer.id] = []
+    linesToTest[writer.id] = []
+    print 'Loading lines for', writer
+    writerForms = writer.formsRef
     #print writerForms
     formsCount = 0
+    linesCount = 0 # total number of lines, not per form
     for formSample in writerForms:
         formsCount += 1
         if formsCount > MAX_FORMS:
             break
-        print forms[formSample]
+        #print forms[formSample]
         formLines = forms[formSample].linesRef
-        linesCount = 0
         for lineSample in formLines:
-            linesCount += 1
-            if linesCount > MAX_LINES:
+            if linesCount >= (MAX_LINES_TO_TRAIN + MAX_LINES_TO_TEST):
                 break
-            print lineSample
-            wordsInLine = lines[lineSample].wordsRef
+            #print lineSample
+            wordsIdsInLine = lines[lineSample].wordsRef
 
             total_width = 0 # to keep track of total width of line formed so far, so that it doesn't exceed MAX_WIDTH
             word_count = 0 # to count number of words considered to be included in line
-            for word in wordsInLine:
-                wordWidth = words[word].boundingBox[2]
+            for wordId in wordsIdsInLine:
+                wordWidth = words[wordId].boundingBox[2]
+                words[wordId].loadData() # load image data
                 total_width += wordWidth
                 word_count += 1
                 if total_width > MAX_WIDTH:
                     break
-
+            
+            # Evg @Nishant: looks like you get only first words from line, whose total width is ok
+            # in this case if the line is 1500, MAX_WIDTH is 500, last words will never appear in our dataset
             MAX_WORDS = word_count
-            if len(wordsInLine) > MAX_WORDS:
-                wordsInLine = wordsInLine[0:MAX_WORDS]
-            lineBoundingBox = lines[lineSample].boundingBox
-            #print lineBoundingBox
+            if len(wordsIdsInLine) > MAX_WORDS:
+                wordsIdsInLine = wordsIdsInLine[0:MAX_WORDS]
 
             # Applying all words permutations possible to form lines
-            applyPermutations(wordsInLine, lineSample, writerSample)
+            linesWithWordPermutations = applyPermutations(wordsIdsInLine, lineSample, writerSample, MAX_NUM_WORDS_PERMITATIONS)
+            #print 'num permutations', len(linesWithWordPermutations)
+            if (linesCount < MAX_LINES_TO_TRAIN):
+                # write train set
+                linesToTrain[writer.id] += linesWithWordPermutations
+            else:
+                # write test set. TODO: do not need permutations here?
+                linesToTest[writer.id] += linesWithWordPermutations
+            linesCount += 1
+        # end loop for lines
+    # end loop for forms
+    if (linesCount > MAX_LINES_TO_TRAIN):
+        numLinesToTrainForCurWriter = MAX_LINES_TO_TRAIN
+        numLinesToTestForCurWriter = linesCount - MAX_LINES_TO_TRAIN
+    else:
+        numLinesToTrainForCurWriter = linesCount
+        numLinesToTestForCurWriter = 0
+    
+    print '    loaded', numLinesToTrainForCurWriter, 'lines for training', ', in total with permutations - ', len(linesToTrain[writer.id])
+    print '    loaded', numLinesToTestForCurWriter, 'lines for testing', ', in total with permutations - ', len(linesToTest[writer.id])
+    numLinesToTrain += len(linesToTrain[writer.id])
+    numLinesToTest += len(linesToTest[writer.id])
+# end loop for writers
 
 ###########################################################################
 
-
-
-numWritersToTrain = 3
-numLinesToTrain = 6
-numLinesToTest = 2
-# load forms, lines and words images for writers
-# and create dict (idwriter1: all his lines, idwriter2: all his lines)
-linesToTrain = {}
-linesToTest = {}
-for item in sortedWriters[1:numWritersToTrain+1]: # first wrote too much
-    writer = item[1]
-    linesToTrain[writer.id] = []
-    linesToTest[writer.id] = []
-    print 'Loading lines for writer ', writer.id, 'from', len(writer.formsRef), ' forms...'
-    print 'Writer\'s total lines - ', writer.sumLines()
-    for formId in writer.formsRef:
-        for lineId in forms[formId].linesRef:
-            lines[lineId].loadData()
-            # for debug: take only few lines per writer
-            if (len(linesToTrain[writer.id]) < numLinesToTrain):
-                linesToTrain[writer.id].append(lines[lineId].data[:, 0:lines[lineId].data.shape[1]/2])
-                linesToTrain[writer.id].append(lines[lineId].data[:, lines[lineId].data.shape[1]/2:-1]) # TEMP TODO remove after we will have words concatenations
-            elif (len(linesToTest[writer.id]) < numLinesToTest):
-                linesToTest[writer.id].append(lines[lineId].data)
-                
-################################################################################
 # preprocess images
-minAcceptableWidth = 500
-(linesToTrain, lineWidth, lineHeight, varianceTrain) = preprocessImages(linesToTrain, minAcceptableWidth)
-(linesToTest, lineWidth, lineHeight, varianceTest)  = preprocessImages(linesToTest, minAcceptableWidth, lineWidth, lineHeight)
+print '------ Train set:'
+(linesToTrain, lineHeight, varianceTrain) = preprocessImages(linesToTrain)
+print '------ Test set:'
+(linesToTest, lineHeight, varianceTest)  = preprocessImages(linesToTest, lineHeight)
 #  len(linesToTrain.items()[0][1])
 # plt.imshow(linesToTrain.items()[0][1][0])
 
@@ -508,9 +509,9 @@ minAcceptableWidth = 500
 #%% pack to pairs
 packToTriplets = False
 dataFolder = "data"
-print '------'
-print numLinesToTrain, 'lines for each writer will be used for creating training dataset'
-print numLinesToTest, 'lines for each writer will be used for creating testing dataset'
+print '----------------------------------------------------------------------------'
+print numLinesToTrain, 'lines in total will be used for creating training dataset'
+print numLinesToTest, 'lines in total will be used for creating testing dataset'
 if (not packToTriplets):
     print 'Packing to LMDB pairs...'
     nameLMDBtrain = os.path.join(dataFolder, 'pairs_train_lmdb')
@@ -536,18 +537,15 @@ datum.ParseFromString(raw_datum)
 flatIm = np.fromstring(datum.data, dtype=np.uint8)
 im = flatIm.reshape(datum.channels, datum.height, datum.width)
 
-
-scipy.misc.imsave('network/testPair.jpg', im[1, :, :]) # im in second channel
+scipy.misc.imsave('testPair_from_trainLMDB.jpg', im[1, :, :]) # im in second channel
 
 print 'Packing finished'
 
-print '=============================='
+print '----------------------------------------------------------------------------'
+print '----------------------------------------------------------------------------'
 print '!! Before new training, dont forget to:'
-print '1. Recalculate train and test mean'
-print '2. In train_test prototxt:'
-print '                scale for train - ', 1 / varianceTrain
-print '                scale for test - ', 1 / varianceTest
-print '!! Before predicting, dont dorget to:'
-print 'In deploy prototxt file:'
+print '   * Recalculate train and test mean'
+print '!! Before predicting, dont forget to:'
+print '   * In deploy prototxt file:'
 print '                input_dim height', lineHeight
-print '                input_dim width', lineWidth
+print '                input_dim width', MAX_WIDTH

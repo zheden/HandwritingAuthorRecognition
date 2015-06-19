@@ -14,7 +14,7 @@ layer {
   }
     transform_param {
     mean_file: "data/pairs_train_mean.binaryproto"
-	scale: 0.0039
+	scale: 0.0078125
   }
 }
 layer {
@@ -32,7 +32,7 @@ layer {
   }
   transform_param {
     mean_file: "data/pairs_test_mean.binaryproto"
-	scale: 0.0039
+	scale: 0.0078125
   }
 }
 layer {
@@ -55,10 +55,14 @@ layer {
   top: "conv1_p"
   convolution_param {
     num_output: 18
-    kernel_size: 4
+    kernel_size: 7
     stride: 1
 	weight_filler {
       type: "xavier"
+    }
+	bias_filler {
+      type: "constant"
+      value: 0
     }
   }
 }
@@ -94,10 +98,14 @@ layer {
   top: "conv2_p"
   convolution_param {
     num_output: 7
-    kernel_size: 3
+    kernel_size: 4
     stride: 1
 	weight_filler {
       type: "xavier"
+    }
+	bias_filler {
+      type: "constant"
+      value: 0
     }
   }
 }
@@ -128,6 +136,13 @@ layer {
   type: "InnerProduct"
   inner_product_param {
     num_output: 256
+	weight_filler {
+      type: "xavier"
+    }
+	bias_filler {
+      type: "constant"
+      value: 0
+    }
   }
   bottom: "pool2"
   top: "fc1"
@@ -137,6 +152,13 @@ layer {
   type: "InnerProduct"
   inner_product_param {
     num_output: 16
+	weight_filler {
+      type: "xavier"
+    }
+	bias_filler {
+      type: "constant"
+      value: 0
+    }
   }
   bottom: "fc1"
   top: "descriptor"
@@ -146,6 +168,13 @@ layer {
   type: "InnerProduct"
   inner_product_param {
     num_output: 256
+	weight_filler {
+      type: "xavier"
+    }
+	bias_filler {
+      type: "constant"
+      value: 0
+    }
   }
   bottom: "pool2_p"
   top: "fc1_p"
@@ -155,6 +184,13 @@ layer {
   type: "InnerProduct"
   inner_product_param {
     num_output: 16
+	weight_filler {
+      type: "xavier"
+    }
+	bias_filler {
+      type: "constant"
+      value: 0
+    }
   }
   bottom: "fc1_p"
   top: "descriptor_p"
