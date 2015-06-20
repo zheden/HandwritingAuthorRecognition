@@ -292,6 +292,48 @@ def createLMDBtriplets(i_nameLMDB, i_lines):
     print '-> wrote ',indexLineLMDB, 'entried in LMDB'
     env.close()
     return
+    
+#####################################################################
+def applyPermutations(i_wordsInLine, MAX_WIDTH, i_lineBoundingBox, i_lineSample, i_writerSample, i_wordsSpace):
+    combinationSeen = [] # to keep track of combinations of words (for a line) seen so far
+    wordGroupId = -1
+    outputLines = []
+    for wordGroup in itertools.permutations(i_wordsInLine, len(i_wordsInLine)): # iterate for each combination of words
+        total_width = 0 # to keep track of total width of line formed so far, so that it doesn't exceed MAX_WIDTH
+        word_count = 0 # to count number of words considered to be included in line
+        wordsSet = [] # final set of words which form a new line. Remaining words are not considered because of limited MAX_WIDTH
+        for word in wordGroup:
+            #print total_width
+            if total_width > MAX_WIDTH: # we don't add words to wordsSet because MAX_WIDTH has been achieved
+                # if wordsSet already resides in combinationSeen then don't consider new line formation to avoid duplicate new lines
+                if wordsSet in combinationSeen:
+                    wordsSet = []
+                    break
+                else:
+                    combinationSeen.append(wordsSet)
+                    wordGroupId += 1
+                    #print wordGroup
+                    # initializing new bounding box for line in which words will be pasted
+                    outerBox = np.empty((i_lineBoundingBox[3], MAX_WIDTH))
+                    outerBox.fill(255)
+                    imgLine = Image.fromarray(outerBox) # creating empty image from bounding box array
+                    xPixelsCovered = 0 # to set x position of new word added to the line
+                    for word in wordsSet:
+                        #print word
+                        yStartPos = words[word].boundingBox[1]-i_lineBoundingBox[1] # calculate a word's starting position on Y axis in bounding box
+                        wordImg = Image.fromarray(words[word].data) # Load word's image data
+                        imgLine.paste(wordImg, (xPixelsCovered,yStartPos))
+                        xPixelsCovered += wordImg.size[0] + i_wordsSpace # i_wordsSpace extra pixels added to create emtpy space between words
+                        #print xPixelsCovered
+                    #imgLine.show()
+                    #saveToDisk(wordGroupId, imgLine, word_count, i_lineSample, i_writerSample)
+                    outputLines.append(np.array(imgLine))
+                    break
+            wordsSet.append(word)
+            wordWidth = words[word].boundingBox[2]
+            total_width += wordWidth+(word_count*i_wordsSpace) # update total_width covered so far
+            word_count += 1
+    return outputLines
 #####################################################################
 #####################################################################
 
@@ -382,7 +424,7 @@ for writerId in writers:
 sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, reverse=True)
 
 ############################ Concatenating words to form lines ######################################
-MAX_WRITERS = 1
+MAX_WRITERS = 3
 # Maximum allowed width of lines to be formed, height is mean value for all heights
 MAX_WIDTH = 300
 
@@ -395,6 +437,11 @@ linesToTest = {}
 
 numLinesToTrain = 0 # counters how many lines we created for all writers
 numLinesToTest = 0
+
+print '--------num writers -', MAX_WRITERS
+print '--------num lines train per writer -', MAX_LINES_TO_TRAIN
+print '--------num lines test per writer -', MAX_LINES_TO_TEST
+print '--------max permutations per line -', MAX_NUM_WORDS_PERMUTATIONS
 
 writersCount = 0
 for writerSample in sortedWriters:
@@ -417,61 +464,17 @@ for writerSample in sortedWriters:
         for lineSample in formLines:
             if linesCount >= (MAX_LINES_TO_TRAIN + MAX_LINES_TO_TEST):
                 break
-            print lines[lineSample]
+            #print lines[lineSample]
             wordsInLine = lines[lineSample].wordsRef
             lineBoundingBox = lines[lineSample].boundingBox
             for wordId in wordsInLine: # load images for words of the line
                 words[wordId].loadData()
             
-############################################################################################
-            combinationSeen = [] # to keep track of combinations of words (for a line) seen so far
-            wordGroupId = -1
-            outputLines = []
-            for wordGroup in itertools.permutations(wordsInLine, len(wordsInLine)): # iterate for each combination of words
-                total_width = 0 # to keep track of total width of line formed so far, so that it doesn't exceed MAX_WIDTH
-                word_count = 0 # to count number of words considered to be included in line
-                wordsSet = [] # final set of words which form a new line. Remaining words are not considered because of limited MAX_WIDTH
-                for word in wordGroup:
-                    #print total_width
-                    if total_width > MAX_WIDTH: # we don't add words to wordsSet because MAX_WIDTH has been achieved
-                        # if wordsSet already resides in combinationSeen then don't consider new line formation to avoid duplicate new lines
-                        if wordsSet in combinationSeen:
-                            wordsSet = []
-                            break
-                        else:
-                            combinationSeen.append(wordsSet)
-                            #MAX_WORDS = word_count
-                            wordGroupId += 1
-                            #print wordGroup
-                            # initializing new bounding box for line in which words will be pasted
-                            outerBox = np.empty((lineBoundingBox[3], MAX_WIDTH))
-                            outerBox.fill(255)
-                            img = Image.fromarray(outerBox) # creating empty image from bounding box array
-                            xPixelsCovered = 0 # to set x position of new word added to the line
-                            for word in wordsSet:
-                                #print word
-                                #print words[word].boundingBox
-                                yStartPos = words[word].boundingBox[1]-lineBoundingBox[1] # calculate a word's starting position on Y axis in bounding box
-                                wordImg = Image.fromarray(words[word].data) # Load word's image data
-                                img.paste(wordImg, (xPixelsCovered,yStartPos))
-                                xPixelsCovered += wordImg.size[0] + 10 # 10 extra pixels added to create emtpy space between words
-                                #print xPixelsCovered
-                            #img.show()
-                            saveToDisk(wordGroupId, img, word_count, lineSample, writerSample)
-                            outputLines.append(np.array(img))
-                            break
-                    wordsSet.append(word)
-                    wordWidth = words[word].boundingBox[2]
-                    total_width += wordWidth+(word_count*10) # update total_width covered so far
-                    word_count += 1
-            if (MAX_NUM_WORDS_PERMUTATIONS < len(outputLines)):
-                linesWithWordPermutations = random.sample(outputLines, MAX_NUM_WORDS_PERMUTATIONS)
-            else:
-                linesWithWordPermutations = outputLines
-            #print combinationSeen
-###########################################################################
+            # do permutations of words
+            linesWithWordPermutations = applyPermutations(wordsInLine, MAX_WIDTH, lineBoundingBox, lineSample, writerSample, 10)
+            if (MAX_NUM_WORDS_PERMUTATIONS < len(linesWithWordPermutations)):
+                linesWithWordPermutations = random.sample(linesWithWordPermutations, MAX_NUM_WORDS_PERMUTATIONS)
 
-            #print 'num permutations', len(linesWithWordPermutations)
             if (linesCount < MAX_LINES_TO_TRAIN):
                 # write train set
                 linesToTrain[writer.id] += linesWithWordPermutations
