@@ -219,7 +219,7 @@ def getLMDBEntryTriplet(i_image1, i_image2, i_image3):
     
 #####################################################################    
 def createLMDBpairs(i_nameLMDB, i_lines):
-    map_size = 100000000000 # TODO use deepdish instead of this ugly num http://deepdish.io/2015/04/28/creating-lmdb-in-python/
+    map_size = 10000000000000 # TODO use deepdish instead of this ugly num http://deepdish.io/2015/04/28/creating-lmdb-in-python/
 
     shutil.rmtree(i_nameLMDB, True)
     env = lmdb.open(i_nameLMDB, map_size=map_size)
@@ -264,7 +264,7 @@ def createLMDBpairs(i_nameLMDB, i_lines):
 #####################################################################    
 # all to all
 def createLMDBtriplets(i_nameLMDB, i_lines):
-    map_size = 100000000000
+    map_size = 10000000000000
 
     shutil.rmtree(i_nameLMDB, True)
     env = lmdb.open(i_nameLMDB, map_size=map_size)
@@ -426,11 +426,11 @@ sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, revers
 ############################ Concatenating words to form lines ######################################
 MAX_WRITERS = 3
 # Maximum allowed width of lines to be formed, height is mean value for all heights
-MAX_WIDTH = 300
+MAX_WIDTH = 100
 
-MAX_LINES_TO_TRAIN = 2 # NOTE: this is number without permutations
+MAX_LINES_TO_TRAIN = 40 # NOTE: this is number without permutations
 MAX_LINES_TO_TEST = 2
-MAX_NUM_WORDS_PERMUTATIONS = 10
+MAX_NUM_WORDS_PERMUTATIONS = 20
 
 linesToTrain = {} # dict (idwriter1: all his lines, idwriter2: all his lines)
 linesToTest = {}
@@ -464,13 +464,16 @@ for writerSample in sortedWriters:
         for lineSample in formLines:
             if linesCount >= (MAX_LINES_TO_TRAIN + MAX_LINES_TO_TEST):
                 break
-            #print lines[lineSample]
+            print lines[lineSample]
             wordsInLine = lines[lineSample].wordsRef
             lineBoundingBox = lines[lineSample].boundingBox
             for wordId in wordsInLine: # load images for words of the line
                 words[wordId].loadData()
+            # remove short words like 'a', '.'
+            wordsInLine = [wId for wId in wordsInLine if (words[wId].data.shape[1] > 15)]
             
             # do permutations of words
+            print 'do permutations for line ', linesCount, 'out of', MAX_LINES_TO_TRAIN + MAX_LINES_TO_TEST, '...'
             linesWithWordPermutations = applyPermutations(wordsInLine, MAX_WIDTH, lineBoundingBox, lineSample, writerSample, 10)
             if (MAX_NUM_WORDS_PERMUTATIONS < len(linesWithWordPermutations)):
                 linesWithWordPermutations = random.sample(linesWithWordPermutations, MAX_NUM_WORDS_PERMUTATIONS)
