@@ -9,6 +9,7 @@ import scipy
 from PIL import Image
 import itertools
 import shutil
+import random
 
 DBpath = os.path.join(".", 'IAM')
 formsPath = os.path.join(DBpath, 'forms')
@@ -382,14 +383,12 @@ sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, revers
 
 ############################ Concatenating words to form lines ######################################
 MAX_WRITERS = 1
-MAX_FORMS = 1
-MAX_LINES = 1
 # Maximum allowed width of lines to be formed, height is mean value for all heights
 MAX_WIDTH = 300
 
 MAX_LINES_TO_TRAIN = 2 # NOTE: this is number without permutations
 MAX_LINES_TO_TEST = 2
-MAX_NUM_WORDS_PERMITATIONS = 10
+MAX_NUM_WORDS_PERMUTATIONS = 10
 
 linesToTrain = {} # dict (idwriter1: all his lines, idwriter2: all his lines)
 linesToTest = {}
@@ -413,20 +412,18 @@ for writerSample in sortedWriters:
     formsCount = 0
     linesCount = 0 # total number of lines, not per form
     for formSample in writerForms:
-        formsCount += 1
-        if formsCount > MAX_FORMS:
-            break
         #print forms[formSample]
         formLines = forms[formSample].linesRef
         for lineSample in formLines:
-            linesCount += 1
-            #if linesCount >= (MAX_LINES_TO_TRAIN + MAX_LINES_TO_TEST):
-            if linesCount > (MAX_LINES):
+            if linesCount >= (MAX_LINES_TO_TRAIN + MAX_LINES_TO_TEST):
                 break
             print lines[lineSample]
             wordsInLine = lines[lineSample].wordsRef
             lineBoundingBox = lines[lineSample].boundingBox
-
+            for wordId in wordsInLine: # load images for words of the line
+                words[wordId].loadData()
+            
+############################################################################################
             combinationSeen = [] # to keep track of combinations of words (for a line) seen so far
             wordGroupId = -1
             outputLines = []
@@ -453,7 +450,6 @@ for writerSample in sortedWriters:
                             xPixelsCovered = 0 # to set x position of new word added to the line
                             for word in wordsSet:
                                 #print word
-                                words[word].loadData() # load image data
                                 #print words[word].boundingBox
                                 yStartPos = words[word].boundingBox[1]-lineBoundingBox[1] # calculate a word's starting position on Y axis in bounding box
                                 wordImg = Image.fromarray(words[word].data) # Load word's image data
@@ -468,7 +464,10 @@ for writerSample in sortedWriters:
                     wordWidth = words[word].boundingBox[2]
                     total_width += wordWidth+(word_count*10) # update total_width covered so far
                     word_count += 1
-            linesWithWordPermutations = outputLines
+            if (MAX_NUM_WORDS_PERMUTATIONS < len(outputLines)):
+                linesWithWordPermutations = random.sample(outputLines, MAX_NUM_WORDS_PERMUTATIONS)
+            else:
+                linesWithWordPermutations = outputLines
             #print combinationSeen
 ###########################################################################
 
