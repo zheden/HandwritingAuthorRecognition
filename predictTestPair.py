@@ -25,10 +25,12 @@ def vis_square(data, padsize=1, padval=0):
     scipy.misc.imsave('filters.jpg', data[:, :, 0])
     return data
 
+print '-------------------------------------------------------------------'
+print '-------------------------------------------------------------------'
 # get image from testing dataset
 env = lmdb.open("data/pairs_train_lmdb", readonly=True)
 with env.begin() as txn:
-    raw_datum = txn.get(b'00000026') # diff authors here
+    raw_datum = txn.get(b'00000000') # diff authors here
 
 datum = caffe.proto.caffe_pb2.Datum()
 datum.ParseFromString(raw_datum)
@@ -40,7 +42,7 @@ scipy.misc.imsave('testIm2.jpg', im[1, :, :])
 
 
 caffe.set_mode_cpu()
-pretrainedFile = "network/snap1/snap_pair_author_rec_iter_60000.caffemodel"
+pretrainedFile = "network/snap/snap_pair_author_rec_iter_1.caffemodel"
 modelFile = "network/pairs_deploy.prototxt"
 
 sys.argv = ['', 'data/pairs_test_mean.binaryproto', 'data/pairs_test_mean.npy']
@@ -49,9 +51,10 @@ meanTest = np.load("data/pairs_test_mean.npy")
 net = caffe.Classifier(modelFile, pretrainedFile,
                        mean=meanTest.mean(0), #   h x w ???
                        raw_scale=255,
-                       image_dims=(96, 300)
+                       image_dims=(96, 200)
                        )
-
+                       
+###################################################################################
 # the parameters are a list of [weights, biases]
 filters = net.params['conv1'][0].data
 ff = filters.transpose(0, 2, 3, 1)
@@ -66,3 +69,14 @@ im1 = im[0, :, :]
 im1 = im1.reshape(im1.shape[0], im1.shape[1], 1)
 descriptor1 = net.predict([im1])
 print descriptor1
+
+print '-------------------------------------------------------------------'
+# input preprocessing: 'data' is the name of the input blob == net.inputs[0]
+transformer = caffe.io.Transformer({'data': net.blobs['data'].data.shape})
+#transformer.set_transpose('data', (2,0,1))
+transformer.set_mean('data', meanTest[0]) # mean pixel
+transformer.set_raw_scale('data', 255)  # the reference model operates on images in [0,255] range instead of [0,1]
+#transformer.set_channel_swap('data', (2,1,0))  # the reference model has channels in BGR order instead of RGB
+
+inputI = transformer.deprocess('data', net.blobs['data'].data[0])
+scipy.misc.imsave('inputI.jpg', net.blobs['data'].data[0][0])

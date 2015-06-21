@@ -426,11 +426,11 @@ sortedWriters = sorted(writers.items(), key=lambda w: w[1].savedSumWords, revers
 ############################ Concatenating words to form lines ######################################
 MAX_WRITERS = 3
 # Maximum allowed width of lines to be formed, height is mean value for all heights
-MAX_WIDTH = 100
+MAX_WIDTH = 200
 
 MAX_LINES_TO_TRAIN = 40 # NOTE: this is number without permutations
 MAX_LINES_TO_TEST = 2
-MAX_NUM_WORDS_PERMUTATIONS = 20
+MAX_NUM_WORDS_PERMUTATIONS = 4
 
 linesToTrain = {} # dict (idwriter1: all his lines, idwriter2: all his lines)
 linesToTest = {}
@@ -470,7 +470,12 @@ for writerSample in sortedWriters:
             for wordId in wordsInLine: # load images for words of the line
                 words[wordId].loadData()
             # remove short words like 'a', '.'
-            wordsInLine = [wId for wId in wordsInLine if (words[wId].data.shape[1] > 15)]
+            wordsInLine = [wId for wId in wordsInLine if (words[wId].data.shape[1] > 25)]
+            
+            # TEMP
+            numToTake = min(8, len(wordsInLine))
+            wordsInLine = wordsInLine[0:numToTake]
+            
             
             # do permutations of words
             print 'do permutations for line ', linesCount, 'out of', MAX_LINES_TO_TRAIN + MAX_LINES_TO_TEST, '...'
