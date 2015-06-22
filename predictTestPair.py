@@ -45,16 +45,17 @@ caffe.set_mode_cpu()
 pretrainedFile = "network/snap/snap_pair_author_rec_iter_1.caffemodel"
 modelFile = "network/pairs_deploy.prototxt"
 
-sys.argv = ['', 'data/pairs_test_mean.binaryproto', 'data/pairs_test_mean.npy']
+sys.argv = ['', 'data/pairs_train_mean.binaryproto', 'data/pairs_train_mean.npy']
 execfile("data/convertMean.py")
-meanTest = np.load("data/pairs_test_mean.npy")
+meanTest = np.load("data/pairs_train_mean.npy")
 net = caffe.Classifier(modelFile, pretrainedFile,
-                       mean=meanTest.mean(0), #   h x w ???
-                       raw_scale=255,
-                       image_dims=(96, 200)
+                       mean = meanTest.mean(1).mean(1), #   [scalar for 1 channel]
+                       raw_scale=255
+                       , image_dims=(96, 200)
                        )
                        
 ###################################################################################
+# test prediction
 # the parameters are a list of [weights, biases]
 filters = net.params['conv1'][0].data
 ff = filters.transpose(0, 2, 3, 1)
@@ -64,19 +65,37 @@ dd = vis_square(ff)
 print 'weights for fc1:'
 print net.blobs['fc1'].data[0]
 
+imS0 = np.swapaxes(im, 1, 0)
+imS0 = np.swapaxes(imS0, 1, 2)
+
 print 'descriptor:'
-im1 = im[0, :, :]
-im1 = im1.reshape(im1.shape[0], im1.shape[1], 1)
-descriptor1 = net.predict([im1])
+imS = imS0.reshape(1, imS0.shape[0], imS0.shape[1], imS0.shape[2])
+descriptor1 = net.predict(imS)
 print descriptor1
 
+###################################################################################
+# analyse outputs from each layer
 print '-------------------------------------------------------------------'
 # input preprocessing: 'data' is the name of the input blob == net.inputs[0]
-transformer = caffe.io.Transformer({'data': net.blobs['data'].data.shape})
-#transformer.set_transpose('data', (2,0,1))
-transformer.set_mean('data', meanTest[0]) # mean pixel
-transformer.set_raw_scale('data', 255)  # the reference model operates on images in [0,255] range instead of [0,1]
+transformer = caffe.io.Transformer({'data': net.blobs['pair_data'].data.shape})
+transformer.set_transpose('data', (2,0,1))
+transformer.set_mean('data', meanTest.mean(1).mean(1)) # mean pixel
+transformer.set_input_scale('data', 0.0078125)  # the reference model operates on images in [0,255] range instead of [0,1]
 #transformer.set_channel_swap('data', (2,1,0))  # the reference model has channels in BGR order instead of RGB
 
-inputI = transformer.deprocess('data', net.blobs['data'].data[0])
-scipy.misc.imsave('inputI.jpg', net.blobs['data'].data[0][0])
+
+print 'imS0.sh ---------------------', imS0.shape
+net.blobs['pair_data'].data[...] = transformer.preprocess('data', imS0)
+scipy.misc.imsave('inputI.jpg', net.blobs['pair_data'].data[0][0])
+out = net.forward()
+
+inputToSlicer = net.blobs['data'].data
+print 'inputToSlicer sh', inputToSlicer.shape
+scipy.misc.imsave('inputToSlicer.jpg', inputToSlicer[0, 0, :, :])
+
+tmp = net.blobs['pair_data'].data
+inputItest = transformer.deprocess('data', tmp)
+scipy.misc.imsave('inputItest.jpg', inputItest[:, :, 0])
+
+print 'Input to network: mean - ', imS0.mean(), ', min - ' ,imS0.min(), ', max - ', imS0.max()
+print 'Input to slicer: mean - ', inputToSlicer.mean(), ', min - ' ,inputToSlicer.min(), ', max - ', inputToSlicer.max()
