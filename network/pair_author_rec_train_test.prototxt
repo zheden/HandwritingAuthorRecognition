@@ -14,7 +14,7 @@ layer {
   }
     transform_param {
     mean_file: "data/pairs_train_mean.binaryproto"
-	scale: 0.0078125
+	scale: 0.00390625
   }
 }
 layer {
@@ -32,7 +32,7 @@ layer {
   }
   transform_param {
     mean_file: "data/pairs_test_mean.binaryproto"
-	scale: 0.0078125
+	scale: 0.00390625
   }
 }
 layer {
