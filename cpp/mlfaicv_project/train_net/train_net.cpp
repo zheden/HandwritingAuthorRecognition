@@ -48,7 +48,7 @@ int countTestImages() {
 }
 
 void trainNet() {
-    int testImagesCount = countTestImages();
+    //int testImagesCount = countTestImages();
 
     Caffe::set_mode(Caffe::CPU);
     caffe::SolverParameter solver_param;
@@ -66,10 +66,10 @@ void trainNet() {
 
     solver_param.set_max_iter(300);
 
-    solver_param.set_test_interval(20);
+    solver_param.set_test_interval(100);
 
     // This number should be #testsamples/#testbatches
-    solver_param.add_test_iter(testImagesCount / 100);
+    solver_param.add_test_iter(10) ;//testImagesCount / 100);
 
     solver_param.set_snapshot(100);
     solver_param.set_snapshot_prefix("writer");

@@ -186,11 +186,9 @@ void prepareImages(vector<Writer> &writers, vector<Size> &sizes) {
 vector<Writer> selectTrainWriters(vector<Writer> &writers) {
     vector<Writer> trainWriters;
 
-    for (int i = 2; i < writers.size(); ++i) {
+    for (int i = 0; i < writers.size(); ++i) {
         if (writers[i].images.size() >= maxNewImagesPerImage)
             trainWriters.push_back(writers[i]);
-        if (trainWriters.size() == 2)
-            break;
     }
 
     return trainWriters;
@@ -203,13 +201,13 @@ vector<Writer> selectTrainData(vector<Writer> &writers) {
 
         Writer newWriter;
         newWriter.id = writer.id;
-        for (int i = 0; i < 1000; ++i) {
+        for (int i = 0; i < 50; ++i) {
             int index = dist(generator);
-            if (i % 10 == 0)
-                cout << index << " ";
+//            if (i % 10 == 0)
+//                cout << index << " ";
             newWriter.images.push_back(writer.images[index]);
         }
-        cout << endl;
+//        cout << endl;
         trainWriters.push_back(newWriter);
     }
     return trainWriters;
@@ -217,28 +215,43 @@ vector<Writer> selectTrainData(vector<Writer> &writers) {
 
 Mat computeMean(vector<Writer> &writers) {
     Mat meanImage(writers[0].images[0].rows, writers[0].images[0].cols, CV_32F);
+    int count = 0;
     for (Writer &writer: writers) {
-        for (Mat &image: writer.images)
+        for (Mat &image: writer.images) {
             meanImage += image;
+            count++;
+        }
     }
-    meanImage /= writers[0].images.size() + writers[1].images.size();
-    //imshow("", meanImage);
-    //waitKey();
+    meanImage /= count;
+    imshow("", meanImage);
+    waitKey();
     return meanImage;
 }
 
-void MatToDatum(const Mat &image, int label, Datum &datum)
+void MatToDatum(const Mat &image1, const Mat &image2, int label, Datum &datum)
 {
-    assert(image.type() == CV_32F);
-    datum.set_channels(1);
-    datum.set_height(image.rows);
-    datum.set_width(image.cols);
+    assert(image1.type() == CV_32F);
+    datum.set_channels(2);
+    datum.set_height(image1.rows);
+    datum.set_width(image1.cols);
     datum.set_label(label);
     datum.clear_float_data();
     google::protobuf::RepeatedField<float>* data_float = datum.mutable_float_data();
-    for (int r = 0; r < image.rows; ++r)
-        for (int c = 0; c < image.cols; ++c)
-            data_float->Add(image.at<float>(r, c));
+    for (int i = 0; i < 2; i++) {
+        const Mat &image = (i == 0) ? image1: image2;
+        for (int r = 0; r < image.rows; ++r)
+            for (int c = 0; c < image.cols; ++c)
+                data_float->Add(image.at<float>(r, c));
+    }
+}
+
+void showImages(const Mat &image1, const Mat &image2, int label) {
+    Mat out(image1.rows,image1.cols*2,CV_32F);
+    image1.copyTo(out(Rect(0*image1.cols,0,image1.cols,image1.rows)));
+    image2.copyTo(out(Rect(1*image1.cols,0,image1.cols,image1.rows)));
+    cout << label << endl;
+    imshow("",out);
+    waitKey();
 }
 
 void createDB(vector<Writer> &writers, Mat &meanImage, string dbName) {
@@ -257,21 +270,46 @@ void createDB(vector<Writer> &writers, Mat &meanImage, string dbName) {
     Datum datum;
     string value;
 
-    int count = 0;
+    uniform_int_distribution<int> dist_w(0, writers.size() - 1);
+    uniform_int_distribution<int> dist_i(0, writers[0].images.size() - 1);
+
+    int others = (int) ceil(writers[0].images.size() - 1) / 2;
+    int count_p = 0, count_n = 0;
     for (uint i = 0; i < writers.size(); i++) {
         Writer writer = writers[i];
-        for (uint j = 0; j < writer.images.size(); j++)
-        {
-            stringstream ss;
-            ss << count++;
+        for (uint j = 0; j < writer.images.size(); j++) {
             Mat image = writer.images[j];
+            Mat unmeanImage = image - meanImage;
 
-            image -= meanImage;
-            MatToDatum(image, i, datum);
-            datum.SerializeToString(&value);
-            batch->Put("pos_" + ss.str(), value);
+            for (uint k = j + 1; k < writer.images.size(); k++) {
+                Mat similarImage = writer.images[k];
+                //showImages(image, similarImage, 1);
+                MatToDatum(unmeanImage, similarImage - meanImage, 1, datum);
+                datum.SerializeToString(&value);
+                stringstream ss;
+                ss << count_p++;
+                batch->Put("pos_" + ss.str(), value);
+            }
+
+            for (uint k = 0; k < others; k++) {
+                int otherWriterIndex;
+                do {
+                    otherWriterIndex = dist_w(generator);
+                } while (otherWriterIndex == i);
+
+                Writer otherWriter = writers[otherWriterIndex];
+                Mat otherImage = otherWriter.images[dist_i(generator)];
+                //showImages(image, otherImage, 0);
+                MatToDatum(unmeanImage, otherImage - meanImage, 0, datum);
+                datum.SerializeToString(&value);
+                stringstream ss;
+                ss << count_n++;
+                batch->Put("neg_" + ss.str(), value);
+            }
         }
     }
+
+    cout << count_p << " positives and " << count_n << " negatives" << endl;
 
     db->Write(leveldb::WriteOptions(), batch);
     delete batch;
@@ -285,10 +323,15 @@ int main(int argc, char *argv[])
     vector<Writer> writers = readWriters(word);
     vector<Size> sizes = getInputSizes(writers);
     prepareImages(writers, sizes);
+
     writers = selectTrainWriters(writers);
-    cout << writers[0].images.size() << " " << writers[1].images.size() << endl;
+    for (Writer &writer: writers)
+        cout << "writerImages[" << writer.id << "] = " << writer.images.size() << endl;
+
     vector<Writer> trainWriters = selectTrainData(writers);
-    cout << trainWriters[0].images.size() << " " << trainWriters[1].images.size() << endl;
+    for (Writer &writer: trainWriters)
+        cout << "writerImages[" << writer.id << "] = " << writer.images.size() << endl;
+
     vector<Writer> testWriters = selectTrainData(writers);
 
     Mat meanImage = computeMean(trainWriters);
