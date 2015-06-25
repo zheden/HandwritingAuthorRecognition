@@ -9,9 +9,9 @@
 namespace caffe {
 
 template <typename Dtype>
-void TripletLossLayer<Dtype>::LayerSetUp(
+void TripletLossLayer<Dtype>::Reshape(
   const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
-  LossLayer<Dtype>::LayerSetUp(bottom, top);
+  LossLayer<Dtype>::Reshape(bottom, top);
   CHECK_EQ(bottom[0]->channels(), bottom[1]->channels());
   CHECK_EQ(bottom[0]->height(), 1);
   CHECK_EQ(bottom[0]->width(), 1);

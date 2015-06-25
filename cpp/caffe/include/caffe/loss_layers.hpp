@@ -228,8 +228,8 @@ class TripletLossLayer : public LossLayer<Dtype> {
  public:
   explicit TripletLossLayer(const LayerParameter& param)
       : LossLayer<Dtype>(param), diff_same_(), diff_other_() {}
-  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+        const vector<Blob<Dtype>*>& top);
 
   virtual inline int ExactNumBottomBlobs() const { return 3; }
   virtual inline const char* type() const { return "TripletLoss"; }
