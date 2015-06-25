@@ -279,7 +279,10 @@ class TripletLossLayer : public LossLayer<Dtype> {
   Blob<Dtype> dist_same_;  // cached for backward pass
   Blob<Dtype> dist_other_;  // cached for backward pass
   Blob<Dtype> uncut_loss_;  // cached for backward pass
-  Blob<Dtype> diff_sq_;  // tmp storage for gpu forward pass
+  Blob<Dtype> diff_same_sq_;  // tmp storage for gpu forward pass
+  Blob<Dtype> diff_other_sq_;  // tmp storage for gpu forward pass
+  Blob<Dtype> dist_same_sq_;  // cached for backward pass
+  Blob<Dtype> dist_other_sq_;  // cached for backward pass
   Blob<Dtype> summer_vec_;  // tmp storage for gpu forward pass
 };
 
