@@ -25,7 +25,10 @@ void TripletLossLayer<Dtype>::LayerSetUp(
   dist_same_.Reshape(bottom[0]->num(), bottom[0]->channels(), 1, 1);
   dist_other_.Reshape(bottom[0]->num(), bottom[0]->channels(), 1, 1);
   uncut_loss_.Reshape(bottom[0]->num(), bottom[0]->channels(), 1, 1);
-  diff_sq_.Reshape(bottom[0]->num(), bottom[0]->channels(), 1, 1);
+  diff_same_sq_.Reshape(bottom[0]->num(), bottom[0]->channels(), 1, 1);
+  diff_other_sq_.Reshape(bottom[0]->num(), bottom[0]->channels(), 1, 1);
+  dist_same_sq_.Reshape(bottom[0]->num(), bottom[0]->channels(), 1, 1);
+  dist_other_sq_.Reshape(bottom[0]->num(), bottom[0]->channels(), 1, 1);
   // vector of ones used to sum along channels
   summer_vec_.Reshape(bottom[0]->channels(), 1, 1, 1);
   for (int i = 0; i < bottom[0]->channels(); ++i)
