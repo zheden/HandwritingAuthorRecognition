@@ -234,6 +234,14 @@ class TripletLossLayer : public LossLayer<Dtype> {
   virtual inline int ExactNumBottomBlobs() const { return 3; }
   virtual inline const char* type() const { return "TripletLoss"; }
 
+  /**
+   * Unlike most loss layers, in the TripletLossLayer we can backpropagate
+   * to all inputs.
+   */
+   virtual inline bool AllowForceBackward(const int bottom_index) const {
+    return true;
+  }
+
  protected:
   /// @copydoc TripletLossLayer
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
