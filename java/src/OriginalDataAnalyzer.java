@@ -10,10 +10,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class DataAnalyzer {
+public class OriginalDataAnalyzer {
 
 	public static void main(String[] args) throws Exception {
-		new DataAnalyzer().analyseWordsWriters(new File("/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/data/ascii"));
+		new OriginalDataAnalyzer().analyseWordsWriters(new File("/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/data/ascii"));
 	}
 
 	public void analyzeLines(File dataDir) throws Exception {

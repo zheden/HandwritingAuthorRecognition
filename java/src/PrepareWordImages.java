@@ -1,11 +1,9 @@
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 public class PrepareWordImages {
 
@@ -23,7 +21,7 @@ public class PrepareWordImages {
 		Map<String, Integer> writerIds = readFormToWriterId(asciiDir);
 		Map<String, Integer> wordCount = readWordCount(asciiDir);
 		
-		int atLeastCount = 50;
+		int atLeastCount = 10;
 		
 		BufferedReader reader = new BufferedReader(new FileReader(new File(asciiDir, "words.txt")));
 		String line;
@@ -33,7 +31,8 @@ public class PrepareWordImages {
 			
 			String[] tokens = line.split(" ");
 			String word = tokens[tokens.length - 1];
-			if (wordCount.get(word) < atLeastCount || word.length() < 2)
+			char ch = word.charAt(0);
+			if (wordCount.get(word) < atLeastCount || !Character.isLetter(ch))
 				continue;
 			
 			String wordId = tokens[0];
