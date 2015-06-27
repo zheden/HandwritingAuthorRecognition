@@ -8,13 +8,18 @@ layer {
     phase: TRAIN
   }
   data_param {
+    # source: "data/train_db"
     source: "data/pairs_train_lmdb"
     batch_size: 25
-    backend: LMDB
+    #backend: LEVELDB
+	backend: LMDB
   }
     transform_param {
     mean_file: "data/pairs_train_mean.binaryproto"
 	scale: 0.00390625
+	
+	#mean_value: 26	
+	#scale: 0.0175438
   }
 }
 layer {
@@ -26,9 +31,11 @@ layer {
     phase: TEST
   }
   data_param {
+    # source: "data/test_db"
     source: "data/pairs_test_lmdb"
     batch_size: 25
-    backend: LMDB
+    # backend: LEVELDB
+	backend: LMDB
   }
   transform_param {
     mean_file: "data/pairs_test_mean.binaryproto"
@@ -53,16 +60,21 @@ layer {
   bottom: "data_p"
   top: "conv1"
   top: "conv1_p"
+  param {
+    lr_mult: 1
+  }
+  param {
+    lr_mult: 2
+  }
   convolution_param {
     num_output: 18
-    kernel_size: 7
+    kernel_size: 6
     stride: 1
 	weight_filler {
       type: "xavier"
     }
 	bias_filler {
       type: "constant"
-      value: 0
     }
   }
 }
@@ -96,6 +108,12 @@ layer {
   bottom: "pool1_p"
   top: "conv2"
   top: "conv2_p"
+  param {
+    lr_mult: 1
+  }
+  param {
+    lr_mult: 2
+  }
   convolution_param {
     num_output: 7
     kernel_size: 4
@@ -105,7 +123,6 @@ layer {
     }
 	bias_filler {
       type: "constant"
-      value: 0
     }
   }
 }
@@ -134,6 +151,8 @@ layer {
 layer {
   name: "fc1"
   type: "InnerProduct"
+  param { name: "ip1_w"    lr_mult: 1  }
+  param { name: "ip1_b"    lr_mult: 2  }
   inner_product_param {
     num_output: 256
 	weight_filler {
@@ -148,8 +167,16 @@ layer {
   top: "fc1"
 }
 layer {
+  name: "relu1"
+  type: "ReLU"
+  bottom: "fc1"
+  top: "fc1"
+}
+layer {
   name: "descriptor"
   type: "InnerProduct"
+  param { name: "ip2_w"    lr_mult: 1  }
+  param { name: "ip2_b"    lr_mult: 2  }
   inner_product_param {
     num_output: 16
 	weight_filler {
@@ -157,7 +184,6 @@ layer {
     }
 	bias_filler {
       type: "constant"
-      value: 0
     }
   }
   bottom: "fc1"
@@ -166,6 +192,8 @@ layer {
 layer {
   name: "fc1_p"
   type: "InnerProduct"
+  param { name: "ip1_w"    lr_mult: 1  }
+  param { name: "ip1_b"    lr_mult: 2  }
   inner_product_param {
     num_output: 256
 	weight_filler {
@@ -173,15 +201,23 @@ layer {
     }
 	bias_filler {
       type: "constant"
-      value: 0
     }
   }
   bottom: "pool2_p"
   top: "fc1_p"
 }
+
+layer {
+  name: "relu1_p"
+  type: "ReLU"
+  bottom: "fc1_p"
+  top: "fc1_p"
+}
 layer {
   name: "descriptor_p"
   type: "InnerProduct"
+  param { name: "ip2_w"    lr_mult: 1  }
+  param { name: "ip2_b"    lr_mult: 2  }
   inner_product_param {
     num_output: 16
 	weight_filler {

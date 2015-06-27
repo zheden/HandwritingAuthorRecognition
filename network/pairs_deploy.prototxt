@@ -2,8 +2,14 @@ name: "AuthorRecNet"
 input: "pair_data"
 input_dim: 1
 input_dim: 2
-input_dim: 96
-input_dim: 200
+input_dim: 113
+input_dim: 230
+
+input: "sim"
+input_dim: 1
+input_dim: 1
+input_dim: 1
+input_dim: 1
 
 layer {
   name: "slice_pair"
@@ -25,7 +31,7 @@ layer {
   top: "conv1_p"
   convolution_param {
     num_output: 18
-    kernel_size: 7
+    kernel_size: 6
     stride: 1
   }
 }
@@ -122,4 +128,12 @@ layer {
   }
   bottom: "fc1_p"
   top: "descriptor_p"
+}
+layer {
+  name: "loss"
+  type: "ContrastiveLoss"
+  bottom: "descriptor"
+  bottom: "descriptor_p"
+  bottom: "sim"
+  top: "loss"
 }
