@@ -20,7 +20,6 @@ using namespace boost;
 string root_dir = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/";
 string input_path = root_dir + "new-data";
 string output_path = root_dir + "new-data-clean";
-int resizeFactor = 4;
 
 struct Image {
     Mat mat;
@@ -96,13 +95,6 @@ void processImages(filesystem::path word_dir) {
             cout << "outlier: " << imageFile.path << endl;
         }
     }
-
-    Size maxSize;
-    maxSize.width = (int) round(mean_w + std_num * std_w);
-    maxSize.width += resizeFactor - maxSize.width % resizeFactor; // make it a multiple of resizeFactor
-    maxSize.height = (int) round(mean_h + std_num * std_h);
-    maxSize.height += resizeFactor - maxSize.height % resizeFactor;
-    cout << "maxSize:" << maxSize << endl;
 }
 
 int main(int argc, char *argv[])
