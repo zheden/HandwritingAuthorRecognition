@@ -1,0 +1,138 @@
+name: "AuthorRecNet"
+input: "triplet_data"
+input_dim: 1
+input_dim: 3
+input_dim: 100
+input_dim: 230
+
+input: "label"
+input_dim: 1
+input_dim: 1
+input_dim: 1
+input_dim: 1
+
+layer {
+  name: "slice_pair"
+  type: "Slice"
+  bottom: "triplet_data"
+  top: "data_1"
+  top: "data_2"
+  top: "data_3"
+  slice_param {
+    slice_dim: 1
+    slice_point: 1
+    slice_point: 2
+  }
+}
+
+layer {
+  name: "conv1"
+  type: "Convolution"
+  bottom: "data_1"
+  top: "conv1_1"
+  param {
+    lr_mult: 1
+  }
+  param {
+    lr_mult: 2
+  }
+  convolution_param {
+    num_output: 18
+    kernel_size: 6
+    stride: 1
+	weight_filler {
+      type: "xavier"
+    }
+	bias_filler {
+      type: "constant"
+    }
+  }
+}
+layer {
+  name: "pool1_1"
+  type: "Pooling"
+  bottom: "conv1_1"
+  top: "pool1_1"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
+
+layer {
+  name: "conv2"
+  type: "Convolution"
+  bottom: "pool1_1"
+  top: "conv2_1"
+  param {
+    lr_mult: 1
+  }
+  param {
+    lr_mult: 2
+  }
+  convolution_param {
+    num_output: 7
+    kernel_size: 4
+    stride: 1
+	weight_filler {
+      type: "xavier"
+    }
+	bias_filler {
+      type: "constant"
+    }
+  }
+}
+layer {
+  name: "pool2"
+  type: "Pooling"
+  bottom: "conv2_1"
+  top: "pool2_1"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
+
+layer {
+  name: "fc1_1"
+  type: "InnerProduct"
+  param { name: "ip1_w"    lr_mult: 1  }
+  param { name: "ip1_b"    lr_mult: 2  }
+  inner_product_param {
+    num_output: 256
+	weight_filler {
+      type: "xavier"
+    }
+	bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+  bottom: "pool2_1"
+  top: "fc1_1"
+}
+layer {
+  name: "relu1_1"
+  type: "ReLU"
+  bottom: "fc1_1"
+  top: "fc1_1"
+}
+layer {
+  name: "descriptor_1"
+  type: "InnerProduct"
+  param { name: "ip2_w"    lr_mult: 1  }
+  param { name: "ip2_b"    lr_mult: 2  }
+  inner_product_param {
+    num_output: 16
+	weight_filler {
+      type: "xavier"
+    }
+	bias_filler {
+      type: "constant"
+    }
+  }
+  bottom: "fc1_1"
+  top: "descriptor_1"
+}
