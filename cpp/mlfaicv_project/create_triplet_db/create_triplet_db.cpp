@@ -100,9 +100,11 @@ Mat computeMean(vector<Writer> &writers) {
     return meanImage;
 }
 
-void makeTriplet(const Mat &image, const Mat &similar, const Mat &other, Datum &datum)
+Datum makeTriplet(int label, const Mat &image, const Mat &similar, const Mat &other)
 {
+    Datum datum;
     assert(image.type() == CV_32F);
+    datum.set_label(label);
     datum.set_channels(3);
     datum.set_height(image.rows);
     datum.set_width(image.cols);
@@ -114,6 +116,7 @@ void makeTriplet(const Mat &image, const Mat &similar, const Mat &other, Datum &
             for (int c = 0; c < mat.cols; ++c)
                 data_float->Add(mat.at<float>(r, c));
     }
+    return datum;
 }
 
 void showImages(const Mat &image1, const Mat &image2, const Mat &image3) {
@@ -208,13 +211,14 @@ void createDB(vector<Writer> &writers, Mat &meanImage) {
 
     leveldb::WriteBatch* batch = new leveldb::WriteBatch();
 
-    Datum datum;
     string value;
 
     int counter = 0;
     for (uint i = 0; i < writers.size(); i++) {
         Writer writer = writers[i];
-        cout << "creating triplets for writer " << writer.id << endl;
+        int writerId = atoi(writer.id.c_str());
+
+        cout << "creating triplets for writer " << writerId << endl;
 
         vector<vector<ImgIndx>> others = createTable(i, writers.size(), writer.images.size());
         for (uint j = 0; j < writer.images.size(); j++) {
@@ -234,13 +238,13 @@ void createDB(vector<Writer> &writers, Mat &meanImage) {
 
                 //showImages(image, similarImage, otherImage);
 
-                makeTriplet(unmeanImage, unmeanSimilar, unmeanOther, datum);
+                Datum datum = makeTriplet(writerId, unmeanImage, unmeanSimilar, unmeanOther);
                 datum.SerializeToString(&value);
                 stringstream ss;
                 ss << counter++;
                 batch->Put("t" + ss.str(), value);
 
-                if ((counter % 1000) == 0) // write to disk after enough puts
+                if ((counter % 100) == 0) // write to disk after enough puts
                 {
                     db->Write(leveldb::WriteOptions(), batch);
                     delete batch;

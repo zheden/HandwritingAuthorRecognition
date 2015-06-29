@@ -12,4 +12,5 @@ SUBDIRS += \
     select_train_set \
     create_triplet_db \
     train_triplet_net \
-    view_triplet_db
+    view_triplet_db \
+    read_descriptors
