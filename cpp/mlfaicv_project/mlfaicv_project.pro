@@ -13,4 +13,5 @@ SUBDIRS += \
     create_triplet_db \
     train_triplet_net \
     view_triplet_db \
-    read_descriptors
+    read_descriptors \
+    create_test_imgs

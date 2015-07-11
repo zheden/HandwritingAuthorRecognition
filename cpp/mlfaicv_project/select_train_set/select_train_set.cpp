@@ -20,10 +20,11 @@ using namespace boost;
 
 string root_dir = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/";
 string input_path = root_dir + "new-data-set1-imgs";
-string output_path = root_dir + "new-data-set1-train1";
+string output_path = root_dir + "new-data-set1-train2";
 
 int selection = 50;
 int total = 2137;
+int max_writers = 5;
 
 default_random_engine generator;
 uniform_int_distribution<int> dist_img(0, total);
@@ -40,7 +41,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    writers.erase(writers.end() - 1);
+    writers.erase(writers.begin() + max_writers, writers.end());
     for (int i = 0; i < selection; ++i) {
         int imgNr = dist_img(generator);
         stringstream ss;

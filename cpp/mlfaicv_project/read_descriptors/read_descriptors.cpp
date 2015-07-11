@@ -26,9 +26,10 @@ using namespace boost;
 using namespace caffe;
 
 string train_path = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data-set1-train1";
-string test_path = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data-set1-imgs";
+string test_path = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data-set1-test-imgs";
 
 int w = 100, h = 35;
+int descriptor_size = 16;
 
 struct Distance {
     string to;
@@ -56,7 +57,7 @@ Distance distance(Descriptor &d1, Descriptor &d2) {
     for (int i = 0; i < d1.values.size(); ++i) {
         total += (d1.values[i] - d2.values[i]) * (d1.values[i] - d2.values[i]);
     }
-    d.value = sqrt(total);
+    d.value = total;
 
     return d;
 }
@@ -139,8 +140,8 @@ vector<Descriptor> readDescriptors(Net<float> &net, Mat &mean, vector<Writer> &w
                 for (int i = 0; i < batch_size; ++i) {
                     Descriptor descriptor;
                     descriptor.writerId = writer.id;
-                    for (int j = 0; j < 16; ++j) {
-                        descriptor.values.push_back(descriptorData[i * 16 + j]);
+                    for (int j = 0; j < descriptor_size; ++j) {
+                        descriptor.values.push_back(descriptorData[i * descriptor_size + j]);
                     }
                     descriptors.push_back(descriptor);
                 }
@@ -156,9 +157,8 @@ void computeDistances(vector<Descriptor> &descriptors, vector<Descriptor> &train
     for (int i = 0; i < descriptors.size(); ++i) {
         for (int j = 0; j < trainedDescriptors.size(); ++j) {
             Distance d = distance(descriptors[i], trainedDescriptors[j]);
-            if (i == j)
-                d.value = 1000000;
-            descriptors[i].distances.push_back(d);
+            if (i != j)
+                descriptors[i].distances.push_back(d);
         }
         std::sort(descriptors[i].distances.begin(), descriptors[i].distances.end());
     }
@@ -184,18 +184,25 @@ int main(int argc, char *argv[])
 {
     vector<Writer> writers = readWriters(train_path);
     Mat mean = readMean(writers[0].images[0].rows, writers[0].images[0].cols);
-    Net<float> net("writer_online.prototxt", caffe::TEST);
-    net.CopyTrainedLayersFrom(argv[1]);
+    Net<float> net(argv[1], caffe::TEST);
+    net.CopyTrainedLayersFrom(argv[2]);
+    int batchSize = boost::dynamic_pointer_cast< MemoryDataLayer<float> >(net.layers()[0])->batch_size();
+
+    cout << batchSize << endl;
 
     vector<Descriptor> trainedDescriptors = readDescriptors(net, mean, writers);
+    for (int i = 0; i < descriptor_size; ++i) {
+        cout << trainedDescriptors[0].values[i] << " ";
+    }
+    cout << endl;
     writers.clear();
 
     computeDistances(trainedDescriptors, trainedDescriptors);
 
     countKNN(trainedDescriptors, 1);
-//    countKNN(trainedDescriptors, 3);
-//    countKNN(trainedDescriptors, 5);
-//    countKNN(trainedDescriptors, 7);
+    countKNN(trainedDescriptors, 3);
+    countKNN(trainedDescriptors, 5);
+    countKNN(trainedDescriptors, 7);
 
     writers = readWriters(test_path);
     vector<Descriptor> descriptors = readDescriptors(net, mean, writers);
@@ -204,8 +211,7 @@ int main(int argc, char *argv[])
     computeDistances(descriptors, trainedDescriptors);
 
     countKNN(descriptors, 1);
-
-//    countKNN(descriptors, 3);
-//    countKNN(descriptors, 5);
-//    countKNN(descriptors, 7);
+    countKNN(descriptors, 3);
+    countKNN(descriptors, 5);
+    countKNN(descriptors, 7);
 }

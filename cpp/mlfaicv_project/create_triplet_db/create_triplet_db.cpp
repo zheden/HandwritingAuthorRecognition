@@ -25,7 +25,7 @@ using namespace cv;
 using namespace boost;
 using namespace caffe;
 
-string input_path = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data-set1-train1";
+string input_path = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data-set1-train2";
 
 default_random_engine generator;
 
