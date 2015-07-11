@@ -6,9 +6,9 @@ import operator
 # Euclidean Distance between two vectors
 def euclideanDist(x,y):
     #print '-------------- test -------------'
-    print x
+    #print x
     #print '-------------- train -------------'
-    print y
+    #print y
     sumSq = 0.0
     #add up the squared differences
     for i in range(len(x)):
@@ -69,7 +69,7 @@ def getNeighbors(i_trainDescriptors, i_testPoint, i_k):
             neighbors.append(distances[x])
         return neighbors
 
-def startMain(trainDescriptors, testDescriptors):
+def startMain(trainDescriptors, testDescriptors, kNeib):
     print 'running nearestNeighbor.py.....................'
 
     # calculate centroid of each cluster of descriptors
@@ -94,12 +94,18 @@ def startMain(trainDescriptors, testDescriptors):
     print "According to centroid method, test point belongs to user : " + str(clusterNumber)
     '''
 
-    k = 3
+    predictedWriters = []
     for testDesc in testDescriptors:
-            neighbors = getNeighbors(trainDescriptors, testDesc, k) # Get k nearest neighbors
-            print neighbors
-            response = getMajority(neighbors) # Get id of neighbor who won majority votes
-            print "According to kNN method, test point belongs to user : " + str(response)
+        print ''
+        neighbors = getNeighbors(trainDescriptors, testDesc, kNeib) # Get k nearest neighbors
+        print 'desc:'
+        print testDesc
+        print 'neib:'
+        print neighbors
+        response = getMajority(neighbors) # Get id of neighbor who won majority votes
+        print "According to kNN method, test point belongs to user : " + str(response)
+        predictedWriters.append(response)
+    return predictedWriters
 
 if __name__ == "__main__":
     '''
@@ -115,4 +121,5 @@ if __name__ == "__main__":
     testPoint = [3.5,4.3]
     ##################################################
     '''
-    startMain(trainDescriptors, testDescriptors)
+    kNeib = 3
+    startMain(trainDescriptors, testDescriptors, kNeib)
