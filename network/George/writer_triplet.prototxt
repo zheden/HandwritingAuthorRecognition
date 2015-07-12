@@ -4,8 +4,9 @@ layer {
   name: "input"
   type: "Data"
   top: "triplet_data"
+  top: "label"
   data_param {
-    source: "train_db"
+    source: "../train_db_14"
     batch_size: 100
   }
 
@@ -326,11 +327,27 @@ layer {
     }
   }
 }
+
 layer {
-  name: "loss"
+  name: "lossTriplet"
   type: "TripletLoss"
   bottom: "descriptor"
   bottom: "descriptor_p"
   bottom: "descriptor_d"
-  top: "loss"
+  top: "lossTriplet"
+  loss_weight : 10
+  triplet_loss_param {
+	margin : 0.01
+  }
 }
+
+layer {
+  name: "lossPair"
+  type: "ContrastiveLoss"
+  bottom: "descriptor"
+  bottom: "descriptor_p"
+  bottom: "label"
+  top: "lossPair"
+  loss_weight : 10
+}
+

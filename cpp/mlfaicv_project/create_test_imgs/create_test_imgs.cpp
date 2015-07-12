@@ -19,8 +19,8 @@ using namespace cv;
 using namespace boost;
 
 string root_dir = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/";
-string input_path = root_dir + "new-data-set1-test-small";
-string output_path = root_dir + "new-data-set1-test-imgs";
+string input_path = root_dir + "new-data-set1-test-small1";
+string output_path = root_dir + "new-data-set1-test1";
 
 default_random_engine generator;
 
@@ -32,7 +32,8 @@ struct Writer {
 int w = 200, h = 70;
 int counter = 0;
 int initial_space = 10;
-int spacing = 30;
+int spacing_vals[] = {35, 5, 25, 25, 30, 35, 30, 35, 0, 35, 55, 0, 25, 25 };
+vector<int> word_spacings(spacing_vals, spacing_vals + sizeof(spacing_vals) / sizeof(int) );
 
 void saveImage(Writer &writer, Mat &textImg) {
     Mat img = Mat::zeros(h, w, CV_8U);
@@ -50,20 +51,20 @@ void saveImage(Writer &writer, Mat &textImg) {
 }
 
 void appendPaddedOrCut(Mat &img, Mat &word_img, int pos) {
-    //cout << img.cols << "x" << img.rows << "+" << word_img.cols << "x" << word_img.rows << "@" << pos << endl;
+   // cout << img.cols << "x" << img.rows << "+" << word_img.cols << "x" << word_img.rows << "@" << pos << endl;
     if (h < word_img.rows)
         word_img(Rect(0, (word_img.rows - h) / 2, word_img.cols, h)).copyTo(img(Rect(pos, 0, word_img.cols, h)));
     else
         word_img.copyTo(img(Rect(pos, (h - word_img.rows) / 2, word_img.cols, word_img.rows)));
 }
 
-Mat makeFirstImage(Mat &word_img) {
+Mat makeFirstImage(Mat &word_img, int spacing) {
     Mat img = Mat::zeros(h, word_img.cols + spacing, CV_8U);
-    appendPaddedOrCut(img, word_img, initial_space);
+    appendPaddedOrCut(img, word_img, spacing);
     return img;
 }
 
-Mat mergeImages(Mat &img, Mat &word_img) {
+Mat mergeImages(Mat &img, Mat &word_img, int spacing) {
     Mat new_img = Mat::zeros(h, img.cols + word_img.cols + spacing, CV_8U);
     img.copyTo(new_img(Rect(0, 0, img.cols, img.rows)));
     appendPaddedOrCut(new_img, word_img, img.cols + spacing);
@@ -73,17 +74,19 @@ Mat mergeImages(Mat &img, Mat &word_img) {
 void createImages(vector<Writer> &writers, int counter) {
     // add randomly until above 200 and then cut to size
     Mat img;
-    for (Writer &writer: writers) {
-        cout << "creating " << counter << " images for writer " << writer.id << endl;
+    for (int i = 0; i < writers.size(); ++i) {
+        Writer &writer = writers[i];
+        int word_spacing = word_spacings[i];
+        cout << "creating " << counter << " images for writer " << writer.id << " with spacing " << word_spacing << endl;
         uniform_int_distribution<int> dist_img(0, writer.images.size() - 1);
-        for (int i = 0; i < counter; ++i) {
+        for (int j = 0; j < counter; ++j) {
             int img_w = 0;
             while (img_w < w) {
                 Mat word_img = writer.images[dist_img(generator)];
                 if (img_w == 0)
-                    img = makeFirstImage(word_img);
+                    img = makeFirstImage(word_img, initial_space);
                 else
-                    img = mergeImages(img, word_img);
+                    img = mergeImages(img, word_img, word_spacing);
                 img_w = img.cols;
             }
             saveImage(writer, img);
