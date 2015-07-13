@@ -92,21 +92,19 @@ def most_common(lst):
         return data.most_common(1)[0][0]
 
 ###################################################################################
-def doKNN(i_trainDesc, i_trainLabels, i_testDesc, k1, k2, is_validation = True):
+def doKNN(i_trainDesc, i_trainLabels, i_testDesc, k1, k2):
     testDesc = np.array(i_testDesc)
+        
     distances = [sum(np.power(x - testDesc, 2)) for x in i_trainDesc]
-    indShift = 0
-    if (not is_validation):
-        indShift = 1 # if it is train data, dont take first, because it will be desc itself
         
     distancesSorted, labelsSorted = zip(*sorted(zip(distances, i_trainLabels)))
-    labelK1 = most_common(labelsSorted[0 + indShift : k1 + indShift])
-    labelK2 = most_common(labelsSorted[0 + indShift : k2 + indShift])
+    labelK1 = most_common(labelsSorted[0 : k1])
+    labelK2 = most_common(labelsSorted[0 : k2])
     return (labelK1, labelK2)
     
-    #if (k > 1 or (k == 1 and indShift > 0)):
+    #if (k > 1):
     #    distancesSorted, labelsSorted = zip(*sorted(zip(distances, i_trainLabels)))
-    #    return most_common(labelsSorted[0 + indShift : k + indShift])
+    #    return most_common(labelsSorted[0  : k ])
     #else:
     #    ind = distances.index(min(distances))
     #    return i_trainLabels[ind]
@@ -116,9 +114,17 @@ def predict(train_descriptors_flat, train_labels, test_descriptors, k1, k2, is_v
     pred_labelsK1 = []
     pred_labelsK2 = []
     ii = 0
-    for desc in test_descriptors:
-        desc = np.array(desc) # TODO remove
-        (labelK1, labelK2) = doKNN(train_descriptors_flat, train_labels, desc, k1, k2, is_validation)
+    for ind, desc in enumerate(test_descriptors):
+        if (not is_validation):
+            # for train data dont compare descriptor with itself
+            train_labels_copy = train_labels
+            train_descriptors_flat_copy = train_descriptors_flat
+            del train_labels_copy[ind]
+            del train_descriptors_flat_copy[ind]
+            (labelK1, labelK2) = doKNN(train_descriptors_flat_copy, train_labels_copy, desc, k1, k2)
+        else:
+            (labelK1, labelK2) = doKNN(train_descriptors_flat, train_labels, desc, k1, k2)
+        
         pred_labelsK1.append(labelK1)
         pred_labelsK2.append(labelK2)
         ii += 1
@@ -169,6 +175,7 @@ def runPrediction(PRETRAINDED_MODEL_FILE, MODEL_PROTO_FILE, TRAIN_IMAGES_PATH, T
     print '*************************** TRAIN DATA: PREDICTION RATE 3NN = ', prediction_rate_trK3
 
 
+    
     print ''
     print '------------------------- PREDICT VAL------------------------------------------------------------------'
     test_descriptors = getDescriptorsTest(test_images, net)
@@ -179,7 +186,12 @@ def runPrediction(PRETRAINDED_MODEL_FILE, MODEL_PROTO_FILE, TRAIN_IMAGES_PATH, T
     prediction_rate_valK3 = 1.0 * sum(np.equal(predicted_labels_valK3, test_labels)) / len(test_labels)
     print '*************************** VALIDATION DATA: PREDICTION RATE 1NN = ', prediction_rate_valK1
     print '*************************** VALIDATION DATA: PREDICTION RATE 3NN = ', prediction_rate_valK3
-
+    '''
+    # TEMP
+    prediction_rate_valK1 = -1
+    prediction_rate_valK3 = -1
+    '''
+    
 
     '''
     #################################### to check old  - test on train data
@@ -208,10 +220,10 @@ if __name__ == "__main__":
     MEAN_FILE = 'data/train_mean.bin'
     TEST_IMAGES_PATH = 'data/test_images/'
 
-    PRETRAINDED_MODEL_FILE = "network/snapTriplet/evg_writer_triplet_iter_4000.caffemodel"
-    #PRETRAINDED_MODEL_FILE = "network/george_500.caffemodel"
-    MODEL_PROTO_FILE = "network/evg_writer_online_1.prototxt"
-    #MODEL_PROTO_FILE = "network/george_writer_online_1.prototxt"
+    #PRETRAINDED_MODEL_FILE = "network/snapTriplet/evg_writer_triplet_iter_4000.caffemodel"
+    PRETRAINDED_MODEL_FILE = "/usr/prakt/p049/HandwritingAuthorRecognition/network/1snap/writer_triplet_iter_1200.caffemodel"
+    #MODEL_PROTO_FILE = "network/evg_writer_online_1.prototxt"
+    MODEL_PROTO_FILE = "/usr/prakt/p049/HandwritingAuthorRecognition/network/1snap/writer_online_1.prototxt"
     
     runPrediction(PRETRAINDED_MODEL_FILE, MODEL_PROTO_FILE, TRAIN_IMAGES_PATH, TEST_IMAGES_PATH, MEAN_FILE)
 

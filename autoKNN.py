@@ -29,7 +29,7 @@ TEST_IMAGES_PATH = os.path.join(repo_path, TEST_IMAGES_PATH)
 MEAN_FILE = os.path.join(repo_path, MEAN_FILE)
 
 
-with open(result_file, "a") as myfile:
+with open(result_file, "w+") as myfile:
     myfile.write("\n-------------------------------------\n")
     myfile.write('TRAIN_IMAGES_PATH ' + TRAIN_IMAGES_PATH)
     myfile.write("\n")
