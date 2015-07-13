@@ -82,7 +82,7 @@ vector<Writer> readWriters() {
 }
 
 Mat computeMean(vector<Writer> &writers) {
-    Mat meanImage(writers[0].images[0].rows, writers[0].images[0].cols, CV_32F);
+    Mat meanImage = Mat::zeros(writers[0].images[0].rows, writers[0].images[0].cols, CV_32F);
     int count = 0;
     for (Writer &writer: writers) {
         for (Mat &image: writer.images) {
@@ -95,8 +95,8 @@ Mat computeMean(vector<Writer> &writers) {
     ofstream mean_out("train_mean.bin", ofstream::binary );
     mean_out.write((char*) meanImage.data, meanImage.cols * meanImage.rows * sizeof(float));
 
-//    imshow("", meanImage);
-//    waitKey();
+    imshow("", meanImage);
+    waitKey();
     return meanImage;
 }
 
