@@ -9,7 +9,7 @@ import operator
 from collections import Counter
 from nearestNeighbor import startMain
 
-caffe.set_mode_gpu()
+caffe.set_mode_gpu() 
 
 
 ###################################################################################
@@ -168,30 +168,40 @@ def runPrediction(PRETRAINDED_MODEL_FILE, MODEL_PROTO_FILE, TRAIN_IMAGES_PATH, T
     print '------------------------- PREDICT TRAIN------------------------------------------------------------------'
     is_validation = False
     (predicted_labels_trK1, predicted_labels_trK3) = predict(train_descriptors_flat, train_labels, train_descriptors_flat, k1, k3, is_validation)
-    
+
     prediction_rate_trK1 = 1.0 * sum(np.equal(predicted_labels_trK1, train_labels)) / len(train_labels)
     prediction_rate_trK3 = 1.0 * sum(np.equal(predicted_labels_trK3, train_labels)) / len(train_labels)
     print '*************************** TRAIN DATA: PREDICTION RATE 1NN = ', prediction_rate_trK1
     print '*************************** TRAIN DATA: PREDICTION RATE 3NN = ', prediction_rate_trK3
 
 
-    
+
     print ''
     print '------------------------- PREDICT VAL------------------------------------------------------------------'
     test_descriptors = getDescriptorsTest(test_images, net)
     is_validation = True
     (predicted_labels_valK1, predicted_labels_valK3) = predict(train_descriptors_flat, train_labels, test_descriptors, k1, k3, is_validation)
-    
+
     prediction_rate_valK1 = 1.0 * sum(np.equal(predicted_labels_valK1, test_labels)) / len(test_labels)
     prediction_rate_valK3 = 1.0 * sum(np.equal(predicted_labels_valK3, test_labels)) / len(test_labels)
     print '*************************** VALIDATION DATA: PREDICTION RATE 1NN = ', prediction_rate_valK1
     print '*************************** VALIDATION DATA: PREDICTION RATE 3NN = ', prediction_rate_valK3
+
+    name_dir = "descriptors"
+    if not os.path.exists(name_dir):
+        os.makedirs(name_dir)
+    np.savetxt(name_dir + "/train_labels.txt", train_labels)
+    np.savetxt(name_dir + "/train_descriptors.txt", train_descriptors_flat)
+    np.savetxt(name_dir + "/test_descriptors.txt", test_descriptors)
+    np.savetxt(name_dir + "/predicted_labels.txt", predicted_labels_valK3)
+    np.savetxt(name_dir + "/test_labels.txt", test_labels)
+    print "Saved descriptors and labels to '", name_dir, "' directory"
     '''
     # TEMP
     prediction_rate_valK1 = -1
     prediction_rate_valK3 = -1
     '''
-    
+
 
     '''
     #################################### to check old  - test on train data
@@ -221,7 +231,7 @@ if __name__ == "__main__":
     TEST_IMAGES_PATH = 'data/test_images/'
 
     #PRETRAINDED_MODEL_FILE = "network/snapTriplet/evg_writer_triplet_iter_4000.caffemodel"
-    PRETRAINDED_MODEL_FILE = "/usr/prakt/p049/HandwritingAuthorRecognition/network/1snap/writer_triplet_iter_1200.caffemodel"
+    PRETRAINDED_MODEL_FILE = "/usr/prakt/p049/HandwritingAuthorRecognition/network/1snap/writer_triplet_iter_1600.caffemodel"
     #MODEL_PROTO_FILE = "network/evg_writer_online_1.prototxt"
     MODEL_PROTO_FILE = "/usr/prakt/p049/HandwritingAuthorRecognition/network/1snap/writer_online_1.prototxt"
     
