@@ -24,6 +24,7 @@ fclose('all');
 
 
 %%
+% USED TOOLBOX - http://lvdmaaten.github.io/drtoolbox/
 NUM_DIM = 3; % num dimensions map to (2 or 3)
 METHOD = 'tSNE'; %'PCA';
 [mapped_train, mapping_train] = compute_mapping(train_descriptors, METHOD, NUM_DIM);
