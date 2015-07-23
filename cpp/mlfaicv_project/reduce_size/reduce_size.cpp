@@ -18,8 +18,8 @@ using namespace cv;
 using namespace boost;
 
 string root_dir = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/";
-string input_path = root_dir + "new-data-set1-test";
-string output_path = root_dir + "new-data-set1-test-small";
+string input_path = root_dir + "all-writers2";
+string output_path = root_dir + "all-writers2-small";
 int resizeFactor = 2;
 
 void processImages(filesystem::path writer_dir) {
@@ -34,6 +34,8 @@ void processImages(filesystem::path writer_dir) {
                 continue;
 
             Mat mat = Scalar::all(255) - imread(fileName, CV_LOAD_IMAGE_GRAYSCALE);
+            if (mat.cols < 5 || mat.rows < 5)
+                continue;
             Size matSize(mat.cols, mat.rows);
             Size finalSize = matSize / resizeFactor;
             resize(mat, mat, finalSize);
@@ -44,7 +46,7 @@ void processImages(filesystem::path writer_dir) {
 
             string new_image_file = new_image_dir + "/" + filePath.leaf().string();
             imwrite(new_image_file, mat);
-            cout << new_image_file << " with size: [" << mat.cols << " x " << mat.rows << "]" << endl;
+            //cout << new_image_file << " with size: [" << mat.cols << " x " << mat.rows << "]" << endl;
         }
     }
 }

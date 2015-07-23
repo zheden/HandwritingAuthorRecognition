@@ -25,11 +25,16 @@ using namespace cv;
 using namespace boost;
 using namespace caffe;
 
-string train_path = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data-set1-train1";
-string test_path = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data-set1-test1";
+string root_dir = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/";
+string train_path = root_dir + "new-data-set1-train3";
+string test_path = root_dir + "new-data-set1-test3";
+string unknown_train_path = root_dir + "all-writers-test-train";
+string unknown_test_path = root_dir + "all-writers-test-val";
 
 int w = 100, h = 35;
 int descriptor_size = 16;
+int batch_size = 50;
+float zeroPenalty = 15;
 
 struct Distance {
     string to;
@@ -49,16 +54,33 @@ struct Writer {
 
 bool operator<(const Distance &d1, const Distance &d2) { return (d1.value < d2.value); }
 
+float euclid_sq_distance(Descriptor &d1, Descriptor &d2) {
+    float total = 0;
+    for (int i = 0; i < d1.values.size(); ++i) {
+        float axisDist = (d1.values[i] - d2.values[i]) * (d1.values[i] - d2.values[i]);
+        total += axisDist;
+    }
+    return total;
+}
+
 Distance distance(Descriptor &d1, Descriptor &d2) {
     Distance d;
     d.to = d2.writerId;
+    d.value = euclid_sq_distance(d1, d2);
+    return d;
+}
 
+Distance similarity(Descriptor &d1, Descriptor &d2) {
+    Distance d;
+    d.to = d2.writerId;
     float total = 0;
     for (int i = 0; i < d1.values.size(); ++i) {
-        total += (d1.values[i] - d2.values[i]) * (d1.values[i] - d2.values[i]);
+        float axisDist = (d1.values[i] - d2.values[i]) * (d1.values[i] - d2.values[i]);
+        if (d1.values[i] == 0 || d2.values[i] == 0)
+            axisDist *= zeroPenalty;
+        total += axisDist;
     }
     d.value = total;
-
     return d;
 }
 
@@ -113,12 +135,11 @@ Mat readMean(int rows, int cols) {
     return mean;
 }
 
-vector<Descriptor> readDescriptors(Net<float> &net, Mat &mean, vector<Writer> &writers) {
+vector<Descriptor> computeDescriptors(Net<float> &net, Mat &mean, vector<Writer> &writers) {
 
     boost::shared_ptr<MemoryDataLayer<float> > input_layer =
             boost::dynamic_pointer_cast< MemoryDataLayer<float> > (net.layers()[0]);
     vector<Descriptor> descriptors;
-    int batch_size = 50;
 
     for (Writer &writer: writers) {
         cout << "computing descriptors for " << writer.id << endl;
@@ -147,6 +168,8 @@ vector<Descriptor> readDescriptors(Net<float> &net, Mat &mean, vector<Writer> &w
                 }
             }
         }
+
+        writer.images.clear();
     }
 
     return descriptors;
@@ -160,54 +183,145 @@ void computeDistances(vector<Descriptor> &descriptors, vector<Descriptor> &train
             if (test_data || i != j)
                 descriptors[i].distances.push_back(d);
         }
-        std::sort(descriptors[i].distances.begin(), descriptors[i].distances.end());
     }
     cout << "finished computing distances " << endl;
 }
 
-void countKNN(vector<Writer> &writers, vector<Descriptor> &descriptors, int k) {
-    vector<vector<int>> misses;
-    map<string,int> writerIndex;
+vector<vector<int>> countKNN(vector<Writer> &writers, vector<Writer> &trainedWriters, vector<Descriptor> &descriptors, int k) {
+    vector<vector<int>> hitCounts;
+    map<string,int> writerRowIndex, writerColIndex;
     for (int i = 0; i < writers.size(); ++i) {
-       vector<int> writerMisses(writers.size(), 0);
-       misses.push_back(writerMisses);
-       writerIndex[writers[i].id] = i;
+       vector<int> writerHitCounts(trainedWriters.size(), 0);
+       hitCounts.push_back(writerHitCounts);
+       writerRowIndex[writers[i].id] = i;
+    }
+    for (int i = 0; i < trainedWriters.size(); ++i) {
+        writerColIndex[trainedWriters[i].id] = i;
     }
 
-    map<string,int> counts;
+    float correct_dist = 0, wrong_dist = 0;
+    int correct_count = 0, wrong_count = 0;
+
     int counter = 0;
     for (int i = 0; i < descriptors.size(); ++i) {
         string writerId = descriptors[i].writerId;
         int same = 0;
+        std::sort(descriptors[i].distances.begin(), descriptors[i].distances.end());
         for (int j = 0; j < k; ++j) {
             string otherWriterId = descriptors[i].distances[j].to;
-            if (writerId == otherWriterId)
+            hitCounts[writerRowIndex[writerId]][writerColIndex[otherWriterId]]++;
+            if (writerId == otherWriterId) {
                 same++;
-            else
-                misses[writerIndex[writerId]][writerIndex[otherWriterId]]++;
+                correct_dist += descriptors[i].distances[j].value;
+                correct_count++;
+            }
+        }
+        for (int j = 0; j < descriptors[i].distances.size(); ++j) {
+            if (writerId != descriptors[i].distances[j].to) {
+                wrong_dist += descriptors[i].distances[j].value;
+                wrong_count++;
+                break;
+            }
         }
         //cout << i << " " << same << " " << k / 2 << endl;
-        if (same > k / 2) {
+        if (same > k / 2)
             counter++;
-            counts[writerId]++;
-        }
     }
     cout << k << "NN accuracy " << ((float) counter) / descriptors.size() << endl;
-    for(auto entry : counts)
-       cout << entry.second << " ";
-    cout << endl;
 
-    cout << endl;
-    for (int i = 0; i < writers.size(); ++i) {
-        for (int j = 0; j < writers.size(); ++j) {
-            if (i == j)
-                cout << "   - ";
-            else
-                cout << setfill(' ') << setw(4) << misses[i][j] << " ";
+    if (trainedWriters.size() < 30) {
+        cout << endl;
+        for (int i = 0; i < writers.size(); ++i) {
+            for (int j = 0; j < trainedWriters.size(); ++j) {
+                cout << setfill(' ') << setw(4) << hitCounts[i][j] << " ";
+            }
+            cout << endl;
         }
         cout << endl;
     }
-    cout << endl;
+
+    correct_dist /= correct_count;
+    wrong_dist /= wrong_count;
+    cout << "closest same: " << correct_dist << " closest other: " << wrong_dist << endl;
+
+    return hitCounts;
+}
+
+vector<Descriptor> createMetaDescriptors(vector<Writer> &writers, vector<vector<int>> &hitCounts, float normalizationFactor) {
+    vector<Descriptor> descriptors;
+    for (int i = 0; i < writers.size(); ++i) {
+        Descriptor descriptor;
+        descriptor.writerId = writers[i].id;
+        for (int j = 0; j < hitCounts[i].size(); ++j) {
+            descriptor.values.push_back(hitCounts[i][j] / normalizationFactor);
+        }
+        descriptors.push_back(descriptor);
+    }
+    return descriptors;
+}
+
+void computeMetaDistances(vector<Descriptor> &descriptors, vector<Descriptor> &trainedDescriptors) {
+    cout << "start computing distances " << endl;
+    for (int i = 0; i < descriptors.size(); ++i) {
+        for (int j = 0; j < trainedDescriptors.size(); ++j) {
+            Distance d = similarity(descriptors[i], trainedDescriptors[j]);
+            //cout << d.value << " ";
+            descriptors[i].distances.push_back(d);
+        }
+        //cout << endl;
+    }
+    cout << "finished computing distances " << endl;
+}
+
+vector<Descriptor> computeCentroids(vector<Descriptor> &descriptors) {
+    vector<Descriptor> centroids;
+    string writerId = "first";
+    Descriptor centroid;
+    int counter = 0;
+    for (Descriptor &descriptor: descriptors) {
+        if (descriptor.writerId != writerId) {
+            if (writerId != "first")
+                centroids.push_back(centroid);
+            Descriptor new_centroid;
+            new_centroid.writerId = descriptor.writerId;
+            new_centroid.values.assign(descriptor_size, 0);
+            centroid = new_centroid;
+            writerId = descriptor.writerId;
+            counter = 0;
+        }
+        for (int i = 0; i < descriptor.values.size(); ++i) {
+            centroid.values[i] += descriptor.values[i];
+        }
+        counter++;
+    }
+    centroids.push_back(centroid);
+
+    for (int i = 0; i < centroids.size(); ++i) {
+        for (int j = 0; j < descriptor_size; ++j) {
+            centroids[i].values[j] /= counter;
+        }
+    }
+
+    for (int i = 0; i < centroids.size(); ++i) {
+        vector<float> distances;
+        float radius = 0, std_dev = 0;
+        for (Descriptor &descriptor: descriptors) {
+            if (descriptor.writerId == centroids[i].writerId) {
+                float dist = sqrt(euclid_sq_distance(descriptor, centroids[i]));
+                radius += dist;
+                distances.push_back(dist);
+            }
+        }
+        radius /= counter;
+        for (int j = 0; j < distances.size(); ++j) {
+            std_dev += (radius - distances[j]) * (radius - distances[j]);
+        }
+        std_dev /= counter;
+        std_dev = sqrt(std_dev);
+        cout << centroids[i].writerId << " " << radius << " +/- " << std_dev << endl;
+    }
+
+    return centroids;
 }
 
 int main(int argc, char *argv[])
@@ -216,32 +330,72 @@ int main(int argc, char *argv[])
     Mat mean = readMean(writers[0].images[0].rows, writers[0].images[0].cols);
     Net<float> net(argv[1], caffe::TEST);
     net.CopyTrainedLayersFrom(argv[2]);
-    int batchSize = boost::dynamic_pointer_cast< MemoryDataLayer<float> >(net.layers()[0])->batch_size();
+//    int batchSize = boost::dynamic_pointer_cast< MemoryDataLayer<float> >(net.layers()[0])->batch_size();
+//    cout << batchSize << endl;
 
-    cout << batchSize << endl;
+    vector<Descriptor> trainedDescriptors = computeDescriptors(net, mean, writers);
+//    for (int i = 0; i < trainedDescriptors.size(); ++i) {
+//        for (int j = 0; j < descriptor_size; ++j) {
+//            cout << trainedDescriptors[i].values[j] << " ";
+//        }
+//        cout << endl;
+//    }
 
-    vector<Descriptor> trainedDescriptors = readDescriptors(net, mean, writers);
-    for (int i = 0; i < descriptor_size; ++i) {
-        cout << trainedDescriptors[0].values[i] << " ";
+//    computeDistances(trainedDescriptors, trainedDescriptors, false);
+//    countKNN(writers, trainedDescriptors, 3);
+
+    vector<Descriptor> centroids = computeCentroids(trainedDescriptors);
+//    for (int i = 0; i < centroids.size(); ++i) {
+//        for (int j = 0; j < descriptor_size; ++j) {
+//            cout << centroids[i].values[j] << " ";
+//        }
+//        cout << endl;
+//    }
+
+    computeDistances(centroids, centroids, false);
+
+    cout << endl;
+    for (int i = 0; i < centroids.size(); ++i) {
+        for (int j = 0; j < centroids[i].distances.size(); ++j) {
+            if (i == j)
+                cout << "     -    ";
+            else
+                cout << setfill(' ') << setw(9) << centroids[i].distances[j].value << " ";
+        }
+        cout << endl;
     }
     cout << endl;
 
-    computeDistances(trainedDescriptors, trainedDescriptors, false);
+//    for (Descriptor &descriptor: trainedDescriptors)
+//        descriptor.distances.clear();
+    computeDistances(trainedDescriptors, centroids, true);
+    countKNN(writers, writers, trainedDescriptors, 1);
 
-    countKNN(writers, trainedDescriptors, 1);
-    countKNN(writers, trainedDescriptors, 3);
-    countKNN(writers, trainedDescriptors, 5);
-    countKNN(writers, trainedDescriptors, 7);
-    writers.clear();
+    vector<Writer> unknown_writers_train = readWriters(unknown_train_path + argv[3]);
+    vector<Descriptor> unknownDescriptors = computeDescriptors(net, mean, unknown_writers_train);
+    computeDistances(unknownDescriptors, centroids, true);
+    vector<vector<int>> hitCounts = countKNN(unknown_writers_train, writers, unknownDescriptors, 1);
 
-    writers = readWriters(test_path);
-    vector<Descriptor> descriptors = readDescriptors(net, mean, writers);
+    float normalizationFactor = unknownDescriptors.size() / (float) unknown_writers_train.size();
+    vector<Descriptor> metaDescriptorsTrain = createMetaDescriptors(unknown_writers_train, hitCounts, normalizationFactor);
 
-    computeDistances(descriptors, trainedDescriptors, true);
+    vector<Writer> unknown_writers_val = readWriters(unknown_test_path + argv[3]);
+    unknownDescriptors = computeDescriptors(net, mean, unknown_writers_val);
+    computeDistances(unknownDescriptors, centroids, true);
+    hitCounts = countKNN(unknown_writers_val, writers, unknownDescriptors, 1);
+    vector<Descriptor> metaDescriptorsVal = createMetaDescriptors(unknown_writers_val, hitCounts, normalizationFactor);
 
-    countKNN(writers, descriptors, 1);
-    countKNN(writers, descriptors, 3);
-    countKNN(writers, descriptors, 5);
-    countKNN(writers, descriptors, 7);
-    writers.clear();
+    computeMetaDistances(metaDescriptorsVal, metaDescriptorsTrain);
+    countKNN(unknown_writers_val, unknown_writers_train, metaDescriptorsVal, 1);
+
+//    vector<Writer> testWriters = readWriters(test_path);
+//    vector<Descriptor> descriptors = computeDescriptors(net, mean, testWriters);
+
+////    computeDistances(descriptors, trainedDescriptors, true);
+////    countKNN(testWriters, descriptors, 3);
+
+////     for (Descriptor &descriptor: descriptors)
+////        descriptor.distances.clear();
+//     computeDistances(descriptors, centroids, true);
+//     countKNN(testWriters, writers, descriptors, 1);
 }

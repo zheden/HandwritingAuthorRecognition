@@ -10,11 +10,11 @@ public class SelectWriterImages {
 	}
 
 	public void gatherImages() throws Exception {
-		File dataDir = new File("/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data-clean");
+		File dataDir = new File("/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data2");
 
-		File newDataDir = new File("/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data-set1-test");
-		String writersString = "332, 333, 334, 336, 337, 338, 339, 340, 341, 342, 343, 344, 346, 347";
-		List<String> writers = Arrays.asList(writersString.split(", "));
+		File newDataDir = new File("/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/all-writers2");
+//		String writersString = "348, 349"; //"332, 333, 334, 336, 337, 338, 339, 340, 341, 342, 343, 344, 346, 347";
+//		List<String> writers = Arrays.asList(writersString.split(", "));
 
 		File[] wordDirs = dataDir.listFiles();
 		for (File wordDir : wordDirs) {
@@ -24,13 +24,13 @@ public class SelectWriterImages {
 			for (File writerDir : writerDirs) {
 				if (writerDir.getName().startsWith("."))
 					continue;
-				if (writers.contains(writerDir.getName())) {
+//				if (writers.contains(writerDir.getName())) {
 					File newWriterDir = new File(newDataDir, writerDir.getName());
 					File[] images = writerDir.listFiles();
 					for (File image : images) {
 						copyFile(image, newWriterDir);
 					}
-				}
+//				}
 			}
 		}
 	

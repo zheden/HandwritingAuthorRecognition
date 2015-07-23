@@ -25,7 +25,7 @@ using namespace cv;
 using namespace boost;
 using namespace caffe;
 
-string input_path = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data-set1-train1";
+string input_path = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data-set1-train3";
 
 default_random_engine generator;
 
@@ -81,7 +81,7 @@ vector<Writer> readWriters() {
     return writers;
 }
 
-Mat computeMean(vector<Writer> &writers) {
+Mat computeMean(vector<Writer> &writers, string suffix) {
     Mat meanImage = Mat::zeros(writers[0].images[0].rows, writers[0].images[0].cols, CV_32F);
     int count = 0;
     for (Writer &writer: writers) {
@@ -92,7 +92,7 @@ Mat computeMean(vector<Writer> &writers) {
     }
     meanImage /= count;
 
-    ofstream mean_out("train_mean.bin", ofstream::binary );
+    ofstream mean_out("train_mean_" + suffix + ".bin", ofstream::binary );
     mean_out.write((char*) meanImage.data, meanImage.cols * meanImage.rows * sizeof(float));
 
     imshow("", meanImage);
@@ -197,8 +197,8 @@ vector<vector<ImgIndx>> createTable(int currentWriter, int writers, int images) 
     return indexes;
 }
 
-void createDB(vector<Writer> &writers, Mat &meanImage) {
-    string dbName = "train_db";
+void createDB(vector<Writer> &writers, Mat &meanImage, string suffix) {
+    string dbName = "train_db_" + suffix;
     cout << "creating db " << dbName << endl;
 
     leveldb::DB* db;
@@ -261,10 +261,11 @@ void createDB(vector<Writer> &writers, Mat &meanImage) {
 
 int main(int argc, char *argv[])
 {
+    string suffix(argv[1]);
     vector<Writer> writers = readWriters();
-    Mat meanImage = computeMean(writers);
+    Mat meanImage = computeMean(writers, suffix);
 //    for (int r = 0; r < meanImage.rows; ++r)
 //        for (int c = 0; c < meanImage.cols; ++c)
 //            cout << meanImage.at<float>(r, c) << endl;
-    createDB(writers, meanImage);
+    createDB(writers, meanImage, suffix);
 }

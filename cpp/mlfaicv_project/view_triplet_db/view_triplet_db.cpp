@@ -69,8 +69,8 @@ void viewDB(string path) {
         Datum datum;
         datum.ParseFromString(value);
         readTriplet(datum,temp1, temp2, temp3);
-        //showImages(temp1, temp2, temp3);
-        //cout << datum.label() << endl;
+        showImages(temp1, temp2, temp3);
+        cout << datum.label() << endl;
 
         test_samples++;
         it->Next();

@@ -19,10 +19,12 @@ using namespace cv;
 using namespace boost;
 
 string root_dir = "/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/";
-string input_path = root_dir + "new-data-set1-test-small1";
-string output_path = root_dir + "new-data-set1-test1";
+string input_path = root_dir + "all-writers-small";
+string output_path_train = root_dir + "new-data-set1-train-unknown";
+string output_path_test = root_dir + "all-writers-test";
 
-default_random_engine generator;
+unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+default_random_engine generator(seed);
 
 struct Writer {
     string id;
@@ -31,10 +33,10 @@ struct Writer {
 
 int w = 200, h = 70;
 int counter = 0;
-int initial_space = 10;
-int spacing = 30;
+int initial_space = 0; //10;
+int spacing = 0;//30;
 
-void saveImage(Writer &writer, Mat &textImg) {
+void saveImage(Writer &writer, Mat &textImg, string output_path) {
     Mat img = Mat::zeros(h, w, CV_8U);
     textImg(Rect(0, 0, w, h)).copyTo(img);
 
@@ -70,13 +72,15 @@ Mat mergeImages(Mat &img, Mat &word_img) {
     return new_img;
 }
 
-void createImages(vector<Writer> &writers, int counter) {
+void createImages(vector<Writer> &writers, int counter, string output_path, int startIndex, int endIndex) {
     // add randomly until above 200 and then cut to size
     Mat img;
     for (int i = 0; i < writers.size(); ++i) {
         Writer &writer = writers[i];
-        cout << "creating " << counter << " images for writer " << writer.id << endl;
-        uniform_int_distribution<int> dist_img(0, writer.images.size() - 1);
+        int writerEndIndex = writer.images.size() < endIndex ? writer.images.size() : endIndex;
+        cout << "creating " << counter << " images for writer " << writer.id << " using images from "
+             << startIndex << " to " << writerEndIndex << endl;
+        uniform_int_distribution<int> dist_img(startIndex, writerEndIndex - 1);
         for (int j = 0; j < counter; ++j) {
             int img_w = 0;
             while (img_w < w) {
@@ -87,7 +91,7 @@ void createImages(vector<Writer> &writers, int counter) {
                     img = mergeImages(img, word_img);
                 img_w = img.cols;
             }
-            saveImage(writer, img);
+            saveImage(writer, img, output_path);
         }
     }
 }
@@ -107,9 +111,10 @@ void readWriter(filesystem::path writer_dir, Writer &writer) {
             writer.images.push_back(image);
         }
     }
+    //cout << "read " << writer.images.size() << " images" << endl;
 }
 
-vector<Writer> readWriters() {
+vector<Writer> readWriters(int max_writers) {
     vector<Writer> writers;
 
     filesystem::path input_dir(input_path);
@@ -122,6 +127,8 @@ vector<Writer> readWriters() {
             writer.id = writer_dir.leaf().string();
             readWriter(writer_dir, writer);
             writers.push_back(writer);
+            if (writers.size() == max_writers)
+                break;
         }
     }
     cout << "read " << writers.size() << " writers" << endl;
@@ -130,6 +137,7 @@ vector<Writer> readWriters() {
 
 int main(int argc, char *argv[])
 {
-    vector<Writer> writers = readWriters();
-    createImages(writers, atoi(argv[1]));
+    vector<Writer> writers = readWriters(atoi(argv[1]));
+    //createImages(writers, 50, output_path_train);
+    createImages(writers, atoi(argv[2]), output_path_test + argv[3], atoi(argv[4]), atoi(argv[5]));
 }

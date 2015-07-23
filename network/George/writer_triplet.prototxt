@@ -6,7 +6,7 @@ layer {
   top: "triplet_data"
   top: "label"
   data_param {
-    source: "../train_db_14"
+    source: "../train_db_rand"
     batch_size: 100
   }
 
@@ -337,7 +337,7 @@ layer {
   top: "lossTriplet"
   loss_weight : 10
   triplet_loss_param {
-	margin : 0.01
+        margin : 0.1
   }
 }
 

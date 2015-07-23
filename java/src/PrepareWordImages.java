@@ -16,12 +16,12 @@ public class PrepareWordImages {
 		File asciiDir = new File(dataDir, "ascii");
 		File wordsDir = new File(dataDir, "words");
 
-		File newDataDir = new File("/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data");
+		File newDataDir = new File("/Users/GiK/Documents/TUM/Semester 4/MLfAiCV/Project/new-data2");
 
 		Map<String, Integer> writerIds = readFormToWriterId(asciiDir);
-		Map<String, Integer> wordCount = readWordCount(asciiDir);
+//		Map<String, Integer> wordCount = readWordCount(asciiDir);
 		
-		int atLeastCount = 10;
+//		int atLeastCount = 1;
 		
 		BufferedReader reader = new BufferedReader(new FileReader(new File(asciiDir, "words.txt")));
 		String line;
@@ -31,9 +31,11 @@ public class PrepareWordImages {
 			
 			String[] tokens = line.split(" ");
 			String word = tokens[tokens.length - 1];
-			char ch = word.charAt(0);
-			if (wordCount.get(word) < atLeastCount || !Character.isLetter(ch))
+			if (!Character.isLetter(word.charAt(0)))
 				continue;
+//			char ch = word.charAt(0);
+//			if (wordCount.get(word) < atLeastCount || !Character.isLetter(ch))
+//				continue;
 			
 			String wordId = tokens[0];
 			String formId = wordId.substring(0, wordId.length() - 6);
